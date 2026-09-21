@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Botasaurus working folders
+output/
+cache/
+profiles/
+profiles.json
+error_logs/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
