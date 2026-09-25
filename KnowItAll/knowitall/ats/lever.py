@@ -31,6 +31,7 @@ def fetch_jobs(detection, site):
             location=locations,
             remote=workplace_to_remote(posting.get("workplaceType")),
             department=categories.get("department") or categories.get("team"),
+            posted=posting.get("createdAt"),
             source="lever",
         ))
     return jobs

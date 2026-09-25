@@ -40,6 +40,7 @@ def fetch_jobs(detection, site):
             location=location.get("fullLocation") or [location.get("city"), location.get("country")],
             remote=_remote(location),
             department=(posting.get("department") or {}).get("label"),
+            posted=posting.get("releasedDate") or posting.get("createdOn"),
             source="smartrecruiters",
         ))
     return jobs

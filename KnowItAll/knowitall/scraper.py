@@ -11,11 +11,12 @@ from . import generic
 from .ats import GUESSABLE, MODULES
 from .ats_detect import Detection, detect, names_match
 from .discovery import discover, parse_site, same_site, unreachable
-from .fetch import fetch_pages, log, page_ok, render_page, settings, soup_of, visible_text_length
+from .fetch import fetch_pages, log, page_ok, render_page, settings, should_stop, soup_of, visible_text_length
 from .normalize import FIELDS, dedupe
 
 SPA_SHELL_RE = re.compile(r'<div id="(root|app|__next)"[^>]*>\s*</div>', re.I)
 BLOCKED_STATUS = {403, 429, 503}
+STREAM_BATCH = 25   # rows handed to the UI at a time
 
 
 def _try_detections(detections, site, limit=3):
@@ -62,7 +63,13 @@ def _needs_browser(page):
     return visible_text_length(page) < 2000 or bool(SPA_SHELL_RE.search(page["html"])) or few_links
 
 
-def find_jobs(url):
+def find_jobs(url, on_jobs=None):
+    """Scrape one company.
+
+    `on_jobs(list_of_jobs)` is called as results become available so a UI can stream them.
+    Cancellation (fetch.settings.cancel_event) is checked between phases; whatever was found
+    up to that point is kept and returned.
+    """
     site = parse_site(url)
     log(f"===== {site.domain} =====")
     result = {
@@ -73,9 +80,13 @@ def find_jobs(url):
         "source": None,
         "notes": [],
         "jobs": [],
+        "stopped": False,
     }
 
     home, candidates = discover(site)
+    if should_stop():
+        result["stopped"] = True
+        return result
     if unreachable(home):
         log(f"{site.host} does not exist (DNS lookup failed); skipping")
         result["notes"].append("website could not be reached")
@@ -90,7 +101,7 @@ def find_jobs(url):
 
     # 2. One hop into "View all jobs" style links
     listing_pages = list(candidates)
-    if jobs is None:
+    if jobs is None and not should_stop():
         hop = [p for p in fetch_pages(generic.view_all_links(candidates, site)) if page_ok(p)]
         if hop:
             log(f"followed {len(hop)} 'view all jobs' link(s)")
@@ -100,11 +111,11 @@ def find_jobs(url):
             detection, jobs = _try_detections(hop_detections, site)
 
     # 3. Guess the board by company name (e.g. stripe.com -> Greenhouse board 'stripe')
-    if jobs is None:
+    if jobs is None and not should_stop():
         detection, jobs = _guess_boards(site)
 
     # 4. Generic HTML extraction (JSON-LD + job-looking links), then Chrome for JavaScript-rendered pages
-    if jobs is None:
+    if jobs is None and not should_stop():
         if unsupported:
             note = f"detected {', '.join(sorted(unsupported))} (not supported yet), using generic extraction"
             log(note)
@@ -121,12 +132,21 @@ def find_jobs(url):
     jobs = dedupe(jobs or [])
     _use_proper_company_name(jobs, result, site)
     result["jobs"] = jobs
+    result["stopped"] = should_stop()
     if detection:
-        result["source"] = detection.describe()
+        result["source"] = detection.ats if not detection.guessed else f"{detection.ats} (by name)"
+        result["source_detail"] = detection.describe()
     elif jobs:
-        result["source"] = "generic extraction from the careers pages"
+        result["source"] = "page"
+        result["source_detail"] = "generic extraction from the careers pages"
     if not candidates and not jobs:
         result["notes"].append("no careers page found")
+
+    # Stream results out in batches so the UI fills in rather than appearing all at once.
+    if on_jobs and jobs:
+        for start in range(0, len(jobs), STREAM_BATCH):
+            on_jobs(jobs[start:start + STREAM_BATCH])
+
     log(f"{site.domain}: {len(jobs)} job(s)")
     return result
 

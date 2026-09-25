@@ -106,6 +106,7 @@ def job_from_ld(posting, page_url, site):
         location=_ld_location(posting),
         remote=remote,
         department=posting.get("occupationalCategory") or posting.get("industry"),
+        posted=posting.get("datePosted"),
         source="json-ld",
     )
 

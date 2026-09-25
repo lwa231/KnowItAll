@@ -29,6 +29,7 @@ def fetch_jobs(detection, site):
             # workplaceType, not isRemote: isRemote was true on a job marked "Hybrid".
             remote=workplace_to_remote(job.get("workplaceType")),
             department=job.get("department") or job.get("team"),
+            posted=job.get("publishedAt"),
             source="ashby",
         ))
     return jobs

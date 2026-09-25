@@ -60,6 +60,7 @@ def fetch_jobs(detection, site):
             location=_location(posting),
             remote=_remote(posting),
             department=None,  # not included in Workday's list response
+            posted=posting.get("postedOn"),  # relative text, e.g. "Posted Today"
             source="workday",
         ))
     return jobs

@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KnowItAll</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        /* =======================================================
+           COLOR SYSTEM
+           primary   : deep neutral black (chrome + working surface)
+           secondary : the grey from iteration 1 (buttons, inputs, heads)
+           accent    : #35365e fills; lifted tint for text/glyphs
+           No borders - separation by colour step only.
+           ======================================================= */
+        :root, [data-theme="dark"] {
+            --chrome:        #000000;
+            --bg-base:       #0b0b0c;
+            --bg-raise:      #111113;
+            --secondary:     #21252b;
+            --secondary-hi:  #2b3038;
+            --zebra:         rgba(255, 255, 255, 0.018);
+            --text-main:     #abb2bf;
+            --text-muted:    #8b929a;
+            --text-dim:      #5c6370;
+            --text-bright:   #d7dae0;
+            --accent:        #35365e;
+            --accent-text:   #8d8ebf;
+            --accent-green:  #98c379;
+            --accent-warn:   #e5c07b;
+            --accent-red:    #e06c75;
+            --accent-glow:   rgba(53, 54, 94, 0.55);
+            --header-h:      200px;
+            --sidebar-w:     240px;
+        }
+        [data-theme="light"] {
+            --chrome:        #ffffff;
+            --bg-base:       #f7f7f8;
+            --bg-raise:      #f0f0f2;
+            --secondary:     #e3e5ea;
+            --secondary-hi:  #d5d8df;
+            --zebra:         rgba(0, 0, 0, 0.015);
+            --text-main:     #3c4048;
+            --text-muted:    #5c6370;
+            --text-dim:      #9299a3;
+            --text-bright:   #16181c;
+            --accent:        #35365e;
+            --accent-text:   #35365e;
+            --accent-green:  #4f8a34;
+            --accent-warn:   #9a6d10;
+            --accent-red:    #c0392f;
+            --accent-glow:   rgba(53, 54, 94, 0.22);
+        }
+
+        * { border: 0 !important; }
+
+        body {
+            background-color: var(--bg-base); color: var(--text-main);
+            font-family: 'Inter', sans-serif; overflow: hidden; margin: 0; padding: 0;
+            transition: background-color 180ms ease, color 180ms ease;
+        }
+        .font-mono { font-family: 'Fira Code', monospace; }
+
+        .app-layout {
+            display: grid;
+            grid-template-columns: var(--sidebar-w) 1fr;
+            grid-template-rows: var(--header-h) 1fr;
+            height: 100vh; width: 100vw;
+        }
+
+        /* ---------------- Left panel ---------------- */
+        .sidebar {
+            grid-row: 1 / 3; grid-column: 1; background-color: var(--chrome);
+            display: flex; flex-direction: column; min-height: 0;
+            transition: background-color 180ms ease;
+        }
+        .brand-block {
+            height: var(--header-h); flex-shrink: 0; display: flex; flex-direction: column;
+            justify-content: center; padding: 0 24px;
+        }
+        .logo-slot {
+            width: 40px; height: 40px; border-radius: 4px; background: var(--secondary);
+            display: flex; align-items: center; justify-content: center; color: var(--text-dim); flex-shrink: 0;
+        }
+        .nav-link {
+            transition: background-color .15s ease, color .15s ease;
+            color: var(--text-muted); border-radius: 4px; margin: 0 12px; cursor: pointer;
+        }
+        .nav-link:hover { background-color: var(--secondary); color: var(--text-bright); }
+        .nav-link.active { background-color: var(--secondary); color: var(--accent-text); }
+        .queue-item { transition: background-color .15s ease; cursor: pointer; border-radius: 4px; margin: 0 12px; }
+        .queue-item:hover { background-color: var(--secondary); }
+        .queue-item.selected { background-color: var(--secondary); }
+        .queue-item.selected .queue-name { color: var(--accent-text); }
+
+        /* ---------------- Header ---------------- */
+        .header {
+            grid-row: 1; grid-column: 2; background-color: var(--chrome);
+            display: flex; align-items: stretch; transition: background-color 180ms ease;
+        }
+        .process-block {
+            width: 132px; flex-shrink: 0; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 10px; cursor: pointer;
+        }
+        .pixel-stage { position: relative; width: 76px; height: 76px; flex-shrink: 0; }
+        .pixel-char {
+            width: 3px; height: 3px; background: transparent; position: absolute;
+            top: 2px; left: 0; transform: scale(4); transform-origin: top left;
+        }
+        .char-idle {
+            box-shadow:
+                6px 0 0 var(--text-bright), 9px 0 0 var(--text-bright),
+                6px 3px 0 var(--text-bright), 9px 3px 0 var(--text-bright),
+                6px 6px 0 var(--text-bright),
+                3px 9px 0 var(--text-bright), 6px 9px 0 var(--text-bright), 9px 9px 0 var(--text-bright),
+                6px 12px 0 var(--text-bright), 9px 12px 0 var(--text-bright), 12px 12px 0 var(--text-bright);
+        }
+        .char-active { animation: walk-cycle .6s infinite steps(1); }
+        @keyframes walk-cycle {
+            0%, 100% { box-shadow:
+                6px 0 0 var(--accent-text), 9px 0 0 var(--accent-text),
+                6px 3px 0 var(--accent-text), 9px 3px 0 var(--accent-text),
+                6px 6px 0 var(--accent-text),
+                3px 9px 0 var(--accent-text), 6px 9px 0 var(--accent-text), 9px 9px 0 var(--accent-text),
+                6px 12px 0 var(--accent-text),
+                3px 15px 0 var(--accent-text), 9px 15px 0 var(--accent-text); }
+            50% { box-shadow:
+                6px 0 0 var(--accent-text), 9px 0 0 var(--accent-text),
+                6px 3px 0 var(--accent-text), 9px 3px 0 var(--accent-text),
+                6px 6px 0 var(--accent-text),
+                3px 9px 0 var(--accent-text), 6px 9px 0 var(--accent-text), 9px 9px 0 var(--accent-text),
+                6px 12px 0 var(--accent-text),
+                6px 15px 0 var(--accent-text); }
+        }
+        .header-controls {
+            flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center;
+            gap: 16px; padding: 20px 24px 20px 4px;
+        }
+        .minimal-input {
+            background: var(--secondary); border-radius: 4px; color: var(--text-bright);
+            transition: box-shadow .15s, background-color .15s; outline: none;
+        }
+        .minimal-input:focus { box-shadow: 0 0 0 2px var(--accent-glow); background: var(--secondary-hi); }
+        .minimal-input::placeholder { color: var(--text-dim); }
+        .btn {
+            border-radius: 4px; background: var(--secondary); color: var(--text-bright);
+            transition: background-color .15s ease, color .15s ease; cursor: pointer;
+        }
+        .btn:hover { background: var(--secondary-hi); }
+        .btn-primary { color: var(--text-bright); background: var(--accent); }
+        .btn-primary:hover { background: #414273; }
+        .btn-stop { color: var(--accent-red); background: rgba(224,108,117,.14); }
+        .btn-stop:hover { background: rgba(224,108,117,.24); }
+        .switch {
+            width: 30px; height: 16px; border-radius: 8px; background: var(--secondary);
+            position: relative; transition: background .2s ease; cursor: pointer; flex-shrink: 0;
+        }
+        .switch-dot {
+            position: absolute; top: 3px; left: 3px; width: 10px; height: 10px;
+            border-radius: 50%; background: var(--text-dim); transition: all .2s ease;
+        }
+        .switch.on { background: var(--accent); }
+        .switch.on .switch-dot { left: 17px; background: var(--accent-text); }
+        .metric-block { display: flex; flex-direction: column; justify-content: center; }
+        .speed-container { width: 120px; height: 4px; border-radius: 2px; background-color: var(--secondary); overflow: hidden; }
+        .speed-fill { height: 100%; width: 0%; background-color: var(--accent-text); transition: width .3s linear; }
+
+        /* ---------------- Views ---------------- */
+        .main-content {
+            grid-row: 2; grid-column: 2; background-color: var(--bg-base);
+            position: relative; min-height: 0; transition: background-color 180ms ease;
+        }
+        .view {
+            position: absolute; inset: 0; display: flex; flex-direction: column; min-height: 0;
+            opacity: 0; visibility: hidden; transform: translateY(3px);
+            transition: opacity 130ms ease, transform 130ms ease, visibility 0s linear 130ms;
+        }
+        .view.active {
+            opacity: 1; visibility: visible; transform: translateY(0);
+            transition: opacity 130ms ease, transform 130ms ease, visibility 0s;
+        }
+
+        /* ---------------- Tab strip ---------------- */
+        .tab-strip {
+            display: flex; align-items: center; gap: 4px; padding: 8px 12px 0 12px;
+            background: var(--bg-base); flex-shrink: 0; overflow-x: auto; user-select: none;
+        }
+        .tab {
+            display: flex; align-items: center; gap: 8px; padding: 7px 12px;
+            border-radius: 4px 4px 0 0; color: var(--text-dim); cursor: grab; white-space: nowrap;
+            transition: background-color .15s ease, color .15s ease;
+        }
+        .tab:hover { background: var(--bg-raise); color: var(--text-muted); }
+        .tab.active { background: var(--secondary); color: var(--accent-text); }
+        .tab-count { color: var(--text-dim); }
+        .tab.active .tab-count { color: var(--text-muted); }
+        .tab-close { color: var(--text-dim); opacity: 0; transition: opacity .15s ease; }
+        .tab:hover .tab-close { opacity: 1; }
+        .tab-close:hover { color: var(--accent-red); }
+
+        /* ---------------- Workspace: 4 quadrant slots ---------------- */
+        .workspace { position: relative; flex: 1; min-height: 0; }
+        .dock { position: absolute; inset: 0; }
+
+        .tile { position: absolute; padding: 3px; box-sizing: border-box; transition: left .12s ease, top .12s ease, width .12s ease, height .12s ease; }
+        .pane {
+            height: 100%; display: flex; flex-direction: column; min-width: 0; min-height: 0;
+            overflow: hidden; background: var(--bg-base); border-radius: 4px;
+        }
+        .pane-head {
+            display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+            background: var(--bg-raise); flex-shrink: 0; cursor: grab; user-select: none;
+        }
+        .pane-head:active { cursor: grabbing; }
+        .pane-title { color: var(--accent-text); font-weight: 500; letter-spacing: .04em; }
+        .pane-stat { color: var(--text-dim); }
+        .pane-btn { color: var(--text-dim); cursor: pointer; padding: 0 3px; }
+        .pane-btn:hover { color: var(--text-bright); }
+        .pane-btn.close:hover { color: var(--accent-red); }
+        .pane-body { flex: 1; overflow: auto; min-height: 0; }
+
+        /* quadrant guides, shown only while dragging */
+        .quad-guides { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 55; }
+        .quad-guides.on { display: block; }
+        .quad-guides i {
+            position: absolute; display: block; border-radius: 4px;
+            box-shadow: inset 0 0 0 1px var(--secondary-hi);
+        }
+
+        /* ---------------- Floating windows ---------------- */
+        .float-layer { position: absolute; inset: 0; pointer-events: none; }
+        .float {
+            position: absolute; pointer-events: auto; display: flex; flex-direction: column;
+            background: var(--bg-base); border-radius: 6px; overflow: hidden;
+            box-shadow: 0 14px 40px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.04);
+        }
+        [data-theme="light"] .float { box-shadow: 0 14px 40px rgba(0,0,0,.18), 0 0 0 1px rgba(0,0,0,.06); }
+        .float.folded { height: auto !important; }
+        .float.folded .pane-body { display: none; }
+        .resize-h {
+            position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize;
+            background: linear-gradient(135deg, transparent 50%, var(--text-dim) 50%, var(--text-dim) 60%, transparent 60%);
+            opacity: .5;
+        }
+        .resize-h:hover { opacity: 1; }
+        .resize-e { position: absolute; right: 0; top: 0; bottom: 16px; width: 6px; cursor: ew-resize; }
+        .resize-s { position: absolute; left: 0; right: 16px; bottom: 0; height: 6px; cursor: ns-resize; }
+
+        .drop-hint {
+            position: absolute; pointer-events: none; display: none; z-index: 60;
+            background: var(--accent-glow); border-radius: 4px;
+            box-shadow: inset 0 0 0 2px var(--accent-text);
+            transition: left .08s ease, top .08s ease, width .08s ease, height .08s ease;
+        }
+        .drag-ghost {
+            position: fixed; z-index: 999; pointer-events: none;
+            background: var(--secondary); color: var(--accent-text);
+            padding: 6px 12px; border-radius: 4px; font-size: 11px;
+            box-shadow: 0 8px 24px rgba(0,0,0,.5);
+        }
+
+        /* ---------------- Table ---------------- */
+        .data-table { width: 100%; border-collapse: collapse; text-align: left; table-layout: fixed; }
+        .data-table th {
+            position: sticky; top: 0; background-color: var(--secondary); color: var(--text-bright);
+            font-size: .7rem; text-transform: uppercase; letter-spacing: .1em;
+            padding: 9px 16px; z-index: 10; cursor: pointer; user-select: none; white-space: nowrap;
+        }
+        .data-table th:hover { color: var(--accent-text); }
+        .sort-caret { color: var(--text-dim); margin-left: 6px; }
+        .data-table td {
+            padding: 8px 16px; font-size: .8rem; color: var(--text-main);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            transition: background-color .15s, color .15s;
+        }
+        .data-table tbody tr.job-row:nth-child(odd) td { background-color: var(--zebra); }
+        .data-table tbody tr.job-row:hover td { background-color: var(--secondary); color: var(--text-bright); }
+
+        .group-head td { background: var(--bg-raise); padding: 10px 16px; position: sticky; top: 33px; z-index: 5; }
+        .group-head:hover td { background: var(--secondary); }
+        .group-head { cursor: pointer; }
+        .group-caret { display: inline-block; width: 14px; color: var(--text-dim); }
+        .group-name { color: var(--accent-text); font-weight: 500; letter-spacing: .04em; }
+        .group-stat { color: var(--text-dim); }
+        .group-stat b { color: var(--text-muted); font-weight: 500; }
+        tbody.collapsed tr.job-row { display: none; }
+        tbody.grouped tr.job-row td:first-child { padding-left: 34px; }
+
+        .job-title { color: var(--accent-text); font-weight: 500; text-decoration: none; }
+        .job-title:hover { text-decoration: underline; }
+        .new-slot { display: inline-block; width: 34px; }
+        .mark-new { color: var(--accent-green); font-size: 10px; letter-spacing: .08em; }
+
+        .row-enter { animation: row-in .25s ease-out; }
+        @keyframes row-in { from { opacity: 0; background-color: var(--accent-glow); } to { opacity: 1; } }
+
+        /* readability: shed low-priority columns as a surface narrows */
+        .narrow-3 .col-dept, .narrow-3 .col-uniq, .narrow-3 .col-posted,
+        .narrow-2 .col-dept, .narrow-2 .col-uniq,
+        .narrow-1 .col-dept { display: none; }
+
+        .activity-strip { background-color: var(--chrome); flex-shrink: 0; transition: background-color 180ms ease; }
+        .activity-head { display: flex; align-items: center; gap: 10px; padding: 8px 24px; cursor: pointer; color: var(--text-muted); }
+        .activity-head:hover { color: var(--text-bright); }
+        .activity-body { max-height: 0; overflow: hidden; transition: max-height .25s ease; background: var(--bg-base); }
+        .activity-body.open { max-height: 180px; overflow-y: auto; }
+
+        .panel { background: var(--bg-raise); border-radius: 6px; padding: 20px 24px; }
+
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--secondary); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--secondary-hi); }
+    </style>
+</head>
+<body>
+    <div class="app-layout">
+
+        <!-- ================= Left panel ================= -->
+        <aside class="sidebar">
+            <div class="brand-block">
+                <div class="flex items-center gap-3">
+                    <div class="logo-slot font-mono text-[9px]">LOGO</div>
+                    <div class="flex flex-col">
+                        <span class="font-semibold text-xl tracking-[0.18em] text-[var(--text-bright)]">KnowItAll</span>
+                        <span class="font-mono text-[10px] text-[var(--text-dim)] tracking-widest uppercase mt-1">Job Listing Scraper</span>
+                    </div>
+                </div>
+                <div class="mt-6">
+                    <div class="font-mono text-[10px] text-[var(--text-dim)] uppercase tracking-widest">Session</div>
+                    <div class="font-mono text-xs text-[var(--text-muted)] mt-1" id="sessionLine">5 companies · 0 jobs</div>
+                </div>
+            </div>
+
+            <nav class="flex flex-col font-mono text-[13px] shrink-0">
+                <div class="px-6 mb-2 text-[10px] text-[var(--text-dim)] uppercase tracking-widest">Views</div>
+                <a class="nav-link active py-2.5 px-4 flex items-center gap-3" data-view="scraper"><span class="text-[var(--text-dim)]">[01]</span> SCRAPER</a>
+                <a class="nav-link py-2.5 px-4 flex items-center gap-3" data-view="history"><span class="text-[var(--text-dim)]">[02]</span> HISTORY</a>
+            </nav>
+
+            <div class="mt-6 flex flex-col min-h-0 flex-1">
+                <div class="px-6 mb-2 flex items-center justify-between shrink-0">
+                    <span class="font-mono text-[10px] text-[var(--text-dim)] uppercase tracking-widest">Queue</span>
+                    <span class="font-mono text-[10px] text-[var(--text-dim)]" id="queueCount">0/5</span>
+                </div>
+                <div class="overflow-y-auto min-h-0 font-mono text-[12px]" id="queueList"></div>
+            </div>
+
+            <div class="shrink-0 flex flex-col font-mono text-[13px] pb-2">
+                <div class="px-6 mb-2 text-[10px] text-[var(--text-dim)] uppercase tracking-widest">System</div>
+                <a class="nav-link py-2.5 px-4 flex items-center gap-3" data-view="output"><span class="text-[var(--text-dim)]">[out]</span> OUTPUT</a>
+                <a class="nav-link py-2.5 px-4 flex items-center gap-3" data-view="settings"><span class="text-[var(--text-dim)]">[sys]</span> SETTINGS</a>
+                <a class="nav-link py-2.5 px-4 flex items-center gap-3" data-view="network"><span class="text-[var(--text-dim)]">[net]</span> NETWORK</a>
+            </div>
+
+            <div class="shrink-0 px-6 py-4">
+                <span id="quitBtn" class="font-mono text-[11px] text-[var(--text-dim)] hover:text-[var(--accent-red)] cursor-pointer tracking-widest uppercase">[quit]</span>
+            </div>
+        </aside>
+
+        <!-- ================= Header ================= -->
+        <header class="header">
+            <div class="process-block" id="processToggleBtn" title="Click to start or stop the run">
+                <div class="pixel-stage"><div class="pixel-char char-active" id="pixelChar"></div></div>
+                <div class="flex flex-col items-center gap-1">
+                    <span class="font-mono text-[11px] tracking-widest uppercase text-[var(--accent-text)]" id="processLabel">Scanning</span>
+                    <span class="font-mono text-[9px] tracking-wider uppercase text-[var(--text-dim)]" id="processSub">3 companies</span>
+                </div>
+            </div>
+            <div class="header-controls">
+                <div class="flex items-center gap-3">
+                    <input type="text" id="addressInput" placeholder="company web address, e.g. stripe.com" class="minimal-input font-mono text-xs px-3 py-2 flex-1 min-w-0">
+                    <button class="btn font-mono text-[11px] tracking-widest uppercase px-4 py-2" id="addBtn">+ Queue</button>
+                    <button class="btn btn-stop font-mono text-[11px] tracking-widest uppercase px-6 py-2" id="runBtn">Stop</button>
+                </div>
+                <div class="flex items-center gap-8">
+                    <div class="flex items-center gap-2">
+                        <span class="font-mono text-[10px] text-[var(--text-dim)] uppercase tracking-widest">Fresh data</span>
+                        <div class="switch" id="freshSwitch"><div class="switch-dot"></div></div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="font-mono text-[10px] text-[var(--text-dim)] uppercase tracking-widest">Max jobs</span>
+                        <input type="text" id="hdrMaxJobs" value="2000" class="minimal-input font-mono text-xs px-2 py-1 w-16 text-right">
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="font-mono text-[10px] text-[var(--text-dim)] uppercase tracking-widest">Detail depth</span>
+                        <input type="text" id="hdrDepth" value="50" class="minimal-input font-mono text-xs px-2 py-1 w-14 text-right">
+                    </div>
+                </div>
+                <div class="flex items-center gap-8">
+                    <div class="metric-block">
+                        <span class="font-mono text-[10px] text-[var(--text-dim)] uppercase tracking-widest mb-1">Jobs found</span>
+                        <span class="font-mono text-sm text-[var(--text-bright)]" id="jobsFound">0</span>
+                    </div>
+                    <div class="metric-block">
+                        <span class="font-mono text-[10px] text-[var(--text-dim)] uppercase tracking-widest mb-1">Elapsed</span>
+                        <span class="font-mono text-sm text-[var(--text-bright)]" id="elapsed">00:00</span>
+                    </div>
+                    <div class="metric-block flex flex-row items-center gap-3">
+                        <span class="font-mono text-[10px] text-[var(--text-dim)] uppercase tracking-widest">Progress</span>
+                        <div class="speed-container"><div class="speed-fill" id="speedBar"></div></div>
+                        <span class="font-mono text-xs text-[var(--accent-text)] w-9 text-right" id="speedValue">0%</span>
+                    </div>
+                    <div class="flex-1"></div>
+                    <input type="text" id="filterInput" placeholder="filter results..." class="minimal-input font-mono text-xs px-3 py-1.5 w-56 shrink-0">
+                </div>
+            </div>
+        </header>
+
+        <!-- ================= Main ================= -->
+        <main class="main-content">
+            <section class="view active" data-view="scraper">
+                <div class="tab-strip font-mono text-[11px]" id="tabStrip"></div>
+                <div class="workspace" id="workspace">
+                    <div class="dock" id="dock"></div>
+                    <div class="quad-guides" id="quadGuides"></div>
+                    <div class="float-layer" id="floatLayer"></div>
+                    <div class="drop-hint" id="dropHint"></div>
+                </div>
+                <div class="activity-strip">
+                    <div class="activity-head font-mono text-[11px]" id="activityHead">
+                        <span id="activityCaret">▸</span>
+                        <span class="uppercase tracking-widest text-[10px]">Activity</span>
+                        <span class="text-[var(--text-dim)]">—</span>
+                        <span class="text-[var(--text-muted)] truncate" id="activityLatest">starting…</span>
+                    </div>
+                    <div class="activity-body font-mono text-[11px] px-6 pb-3 text-[var(--text-dim)]" id="activityBody"></div>
+                </div>
+            </section>
+
+            <section class="view" data-view="history">
+                <div class="flex-1 overflow-auto">
+                    <table class="data-table font-mono">
+                        <thead><tr><th style="width:28%">Company</th><th style="width:18%">Source</th><th style="width:14%">Jobs</th><th style="width:14%">New</th><th style="width:26%" class="text-right">Run</th></tr></thead>
+                        <tbody id="historyBody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="view" data-view="output">
+                <div class="p-6 overflow-auto">
+                    <div class="flex items-center gap-3 mb-6">
+                        <button id="openFolderBtn" class="btn font-mono text-[11px] tracking-widest uppercase px-4 py-2">Open folder</button>
+                        <button id="exportAllBtn" class="btn font-mono text-[11px] tracking-widest uppercase px-4 py-2">Export whole queue</button>
+                    </div>
+                    <table class="data-table font-mono">
+                        <thead><tr><th style="width:46%">File</th><th style="width:18%">Rows</th><th style="width:18%">Size</th><th style="width:18%" class="text-right">Written</th></tr></thead>
+                        <tbody id="outputBody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="view" data-view="settings">
+                <div class="p-6 overflow-auto">
+                    <div class="panel max-w-2xl">
+                        <div class="font-mono text-[10px] text-[var(--text-dim)] uppercase tracking-widest mb-4">Appearance</div>
+                        <div class="flex items-center justify-between cursor-pointer" id="themeRow">
+                            <div>
+                                <div class="text-sm text-[var(--text-bright)]">Light mode</div>
+                                <div class="font-mono text-[11px] text-[var(--text-dim)] mt-1">Flip the interface to the lighter palette</div>
+                            </div>
+                            <div class="switch" id="themeSwitch"><div class="switch-dot"></div></div>
+                        </div>
+                    </div>
+                    <div class="panel max-w-2xl mt-4">
+                        <div class="font-mono text-[10px] text-[var(--text-dim)] uppercase tracking-widest mb-4">Run defaults</div>
+                        <div class="flex items-center justify-between py-2">
+                            <div><div class="text-sm text-[var(--text-bright)]">Max jobs per company</div>
+                                 <div class="font-mono text-[11px] text-[var(--text-dim)] mt-1">Cap for very large boards</div></div>
+                            <input type="text" id="setMaxJobs" value="2000" class="minimal-input font-mono text-xs px-2 py-1.5 w-20 text-right">
+                        </div>
+                        <div class="flex items-center justify-between py-2">
+                            <div><div class="text-sm text-[var(--text-bright)]">Detail depth</div>
+                                 <div class="font-mono text-[11px] text-[var(--text-dim)] mt-1">Job pages opened for full details on self-hosted sites</div></div>
+                            <input type="text" id="setDepth" value="50" class="minimal-input font-mono text-xs px-2 py-1.5 w-20 text-right">
+                        </div>
+                        <div class="flex items-center justify-between py-2">
+                            <div><div class="text-sm text-[var(--text-bright)]">Companies at once</div>
+                                 <div class="font-mono text-[11px] text-[var(--text-dim)] mt-1">How many queued companies scrape concurrently</div></div>
+                            <input type="text" id="setConcurrency" value="3" class="minimal-input font-mono text-xs px-2 py-1.5 w-20 text-right">
+                        </div>
+                        <div class="flex items-center justify-between py-2 cursor-pointer settings-toggle" data-cfg="fresh">
+                            <div><div class="text-sm text-[var(--text-bright)]">Fresh data by default</div>
+                                 <div class="font-mono text-[11px] text-[var(--text-dim)] mt-1">Ignore pages cached in the last 12 hours</div></div>
+                            <div class="switch" id="setFresh"><div class="switch-dot"></div></div>
+                        </div>
+                    </div>
+                    <div class="panel max-w-2xl mt-4">
+                        <div class="font-mono text-[10px] text-[var(--text-dim)] uppercase tracking-widest mb-4">Output</div>
+                        <div class="flex items-center justify-between py-2 cursor-pointer settings-toggle" data-cfg="autosave">
+                            <div><div class="text-sm text-[var(--text-bright)]">Save JSON and CSV automatically</div>
+                                 <div class="font-mono text-[11px] text-[var(--text-dim)] mt-1">Write files as each company finishes</div></div>
+                            <div class="switch on" id="setAutosave"><div class="switch-dot"></div></div>
+                        </div>
+                        <div class="flex items-center justify-between py-2">
+                            <div><div class="text-sm text-[var(--text-bright)]">Output folder</div>
+                                 <div class="font-mono text-[11px] text-[var(--text-dim)] mt-1">output/</div></div>
+                            <button class="btn font-mono text-[11px] tracking-widest uppercase px-4 py-2">Change</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="view" data-view="network">
+                <div class="p-6 overflow-auto">
+                    <div class="panel max-w-2xl">
+                        <div class="font-mono text-[10px] text-[var(--text-dim)] uppercase tracking-widest mb-3">Connection</div>
+                        <div class="font-mono text-[11px] text-[var(--text-dim)]">Awaiting your curation — cache age, request timeouts, Chrome availability.</div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+    /* ===================================================================
+       helpers
+       =================================================================== */
+    function relTime(value) {
+        if (!value) return '—';
+        const d = value instanceof Date ? value : new Date(value);
+        if (isNaN(d)) return '—';
+        const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+        if (mins < 0)   return 'just now';
+        if (mins < 1)   return 'just now';
+        if (mins < 60)  return `${mins}m ago`;
+        const hrs = Math.floor(mins / 60);
+        if (hrs < 24)   return `${hrs}h ago`;
+        const days = Math.floor(hrs / 24);
+        if (days < 7)   return `${days}d ago`;
+        if (days < 30)  return `${Math.floor(days / 7)}w ago`;
+        if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+        return `${Math.floor(days / 365)}y ago`;
+    }
+    const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+    const api = {
+        async get(path) { const r = await fetch(path); if (!r.ok) throw new Error(r.status); return r.json(); },
+        async post(path, body) {
+            const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify(body || {}) });
+            if (!r.ok) throw new Error(r.status);
+            return r.json();
+        },
+    };
+
+    /* view nav */
+    const views = document.querySelectorAll('.view');
+    const navLinks = document.querySelectorAll('.nav-link[data-view]');
+    navLinks.forEach(link => link.addEventListener('click', () => {
+        navLinks.forEach(l => l.classList.toggle('active', l === link));
+        views.forEach(v => v.classList.toggle('active', v.dataset.view === link.dataset.view));
+        if (link.dataset.view === 'history') loadHistory();
+        if (link.dataset.view === 'output') loadOutput();
+    }));
+
+    /* ===================================================================
+       settings (kept in this browser, sent with every run)
+       =================================================================== */
+    const SETTINGS_KEY = 'knowitall.settings';
+    const defaults = { theme: 'dark', maxJobs: 2000, maxEnrich: 50, concurrency: 3, fresh: false, autosave: true };
+    let cfg = { ...defaults };
+    try { cfg = { ...defaults, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; } catch (e) {}
+    const saveCfg = () => { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(cfg)); } catch (e) {} };
+
+    function applyCfg() {
+        document.documentElement.setAttribute('data-theme', cfg.theme);
+        document.getElementById('themeSwitch').classList.toggle('on', cfg.theme === 'light');
+        document.getElementById('setMaxJobs').value = cfg.maxJobs;
+        document.getElementById('setDepth').value = cfg.maxEnrich;
+        document.getElementById('setConcurrency').value = cfg.concurrency;
+        document.getElementById('setFresh').classList.toggle('on', !!cfg.fresh);
+        document.getElementById('setAutosave').classList.toggle('on', !!cfg.autosave);
+        document.getElementById('hdrMaxJobs').value = cfg.maxJobs;
+        document.getElementById('hdrDepth').value = cfg.maxEnrich;
+        document.getElementById('freshSwitch').classList.toggle('on', !!cfg.fresh);
+    }
+
+    document.getElementById('themeRow').addEventListener('click', () => {
+        cfg.theme = cfg.theme === 'light' ? 'dark' : 'light'; saveCfg(); applyCfg();
+    });
+    document.getElementById('freshSwitch').addEventListener('click', () => { cfg.fresh = !cfg.fresh; saveCfg(); applyCfg(); });
+    document.querySelectorAll('.settings-toggle').forEach(row => row.addEventListener('click', () => {
+        const key = row.dataset.cfg;
+        cfg[key] = !cfg[key]; saveCfg(); applyCfg();
+    }));
+    [['setMaxJobs', 'maxJobs'], ['setDepth', 'maxEnrich'], ['setConcurrency', 'concurrency'],
+     ['hdrMaxJobs', 'maxJobs'], ['hdrDepth', 'maxEnrich']].forEach(([id, key]) => {
+        document.getElementById(id).addEventListener('change', e => {
+            const n = parseInt(e.target.value, 10);
+            if (!isNaN(n) && n > 0) { cfg[key] = n; saveCfg(); applyCfg(); }
+        });
+    });
+
+    /* ===================================================================
+       state, fed by the server
+       =================================================================== */
+    const state = { companies: [], jobs: {}, cursor: 0, running: false, elapsed: 0 };
+    const MAX_VIEWS = 4;
+    const byDomain = d => state.companies.find(c => c.domain === d);
+    const jobsOf = d => (state.jobs[d] || (state.jobs[d] = []));
+    const countNew = d => jobsOf(d).filter(j => j.is_new).length;
+    const deptCount = d => new Set(jobsOf(d).map(j => j.department).filter(Boolean)).size;
+    const locCount  = d => new Set(jobsOf(d).map(j => j.location).filter(Boolean)).size;
+
+    let openTabs = [];
+    let activeTab = 'ALL';
+    let sortKey = null, sortDir = 1;          // null = natural order, as the scraper found them
+    const collapsed = new Set();
+    let filterText = '';
+    const matchesFilter = j => !filterText ||
+        `${j.title || ''} ${j.location || ''} ${j.department || ''}`.toLowerCase().includes(filterText);
+
+    /* ===================================================================
+       DOCK: exactly four quadrant slots.
+       Sizing comes from occupancy alone - 100% for one tile, 50/50 for two,
+       quarters for three or four. No dividers, no in-between sizes.
+       =================================================================== */
+    const QUADS = ['tl', 'tr', 'bl', 'br'];
+    const slots = { tl: 'MAIN', tr: null, bl: null, br: null };
+    const floats = [];
+    const foldedPanes = new Set();
+    const FOLD_H = 34;
+
+    const dockEl = document.getElementById('dock');
+    const floatLayer = document.getElementById('floatLayer');
+    const dropHint = document.getElementById('dropHint');
+    const quadGuides = document.getElementById('quadGuides');
+    const workspace = document.getElementById('workspace');
+
+    const isRight  = q => q === 'tr' || q === 'br';
+    const isBottom = q => q === 'bl' || q === 'br';
+    const slotOf = id => QUADS.find(q => slots[q] === id) || null;
+    const dockedIds = () => QUADS.map(q => slots[q]).filter(Boolean);
+    const totalViews = () => openTabs.length + dockedIds().filter(id => id !== 'MAIN').length + floats.length;
+
+    function geometry(map) {
+        const leftUsed = !!(map.tl || map.bl), rightUsed = !!(map.tr || map.br);
+        const topUsed = !!(map.tl || map.tr), bottomUsed = !!(map.bl || map.br);
+        const cols = (leftUsed ? 1 : 0) + (rightUsed ? 1 : 0);
+        const rows = (topUsed ? 1 : 0) + (bottomUsed ? 1 : 0);
+        const out = {};
+        QUADS.forEach(q => {
+            if (!map[q]) return;
+            const width = cols === 2 ? '50%' : '100%';
+            const left  = (cols === 2 && isRight(q)) ? '50%' : '0%';
+            const col = isRight(q) ? ['tr', 'br'] : ['tl', 'bl'];
+            const bothInColumn = map[col[0]] && map[col[1]];
+            let top, height;
+            if (rows === 2 && bothInColumn) {
+                const topFolded = foldedPanes.has(map[col[0]]);
+                const botFolded = foldedPanes.has(map[col[1]]);
+                if (topFolded && !botFolded) {
+                    top = isBottom(q) ? `${FOLD_H}px` : '0px';
+                    height = isBottom(q) ? `calc(100% - ${FOLD_H}px)` : `${FOLD_H}px`;
+                } else if (botFolded && !topFolded) {
+                    top = isBottom(q) ? `calc(100% - ${FOLD_H}px)` : '0px';
+                    height = isBottom(q) ? `${FOLD_H}px` : `calc(100% - ${FOLD_H}px)`;
+                } else {
+                    top = isBottom(q) ? '50%' : '0%'; height = '50%';
+                }
+            } else if (rows === 2) {
+                top = isBottom(q) ? '50%' : '0%';
+                height = foldedPanes.has(map[q]) ? `${FOLD_H}px` : '50%';
+            } else {
+                top = '0%';
+                height = foldedPanes.has(map[q]) ? `${FOLD_H}px` : '100%';
+            }
+            out[q] = { left, top, width, height };
+        });
+        return out;
+    }
+
+    /* ===================================================================
+       table rendering
+       =================================================================== */
+    function jobRowHTML(job) {
+        const link = job.url ? `<a href="${esc(job.url)}" target="_blank" class="job-title">${esc(job.title)}</a>`
+                             : `<span class="job-title">${esc(job.title)}</span>`;
+        return `<tr class="job-row">
+            <td><span class="new-slot">${job.is_new ? '<span class="mark-new">new</span>' : ''}</span>${link}</td>
+            <td class="col-loc text-[var(--text-muted)]">${esc(job.location || '—')}</td>
+            <td class="col-dept text-[var(--text-muted)]">${esc(job.department || '—')}</td>
+            <td class="col-uniq" style="color:${job.is_new ? 'var(--accent-green)' : 'var(--text-dim)'}">${job.is_new ? 'yes' : '—'}</td>
+            <td class="col-posted text-right text-[var(--text-dim)]">${relTime(job.posted)}</td></tr>`;
+    }
+
+    function groupHeadHTML(c) {
+        const d = c.domain;
+        const isCol = collapsed.has(d);
+        const shown = jobsOf(d).filter(matchesFilter).length;
+        const label = { scanning: 'scanning', done: 'complete', queued: 'queued', stopped: 'stopped', failed: 'failed' }[c.state] || c.state;
+        return `<tr class="group-head" data-group="${esc(d)}"><td colspan="5">
+            <div class="flex items-center justify-between gap-4">
+                <span class="flex items-center min-w-0">
+                    <span class="group-caret">${isCol ? '▸' : '▾'}</span>
+                    <span class="group-name truncate">${esc(d)}</span>
+                </span>
+                <span class="group-stat flex items-center gap-4 shrink-0 text-[11px]">
+                    <span>${esc(c.source || '—')}</span>
+                    <span><b>${shown}</b> postings</span>
+                    <span style="color:var(--accent-green)"><b style="color:var(--accent-green)">${countNew(d)}</b> new</span>
+                    <span><b>${deptCount(d)}</b> depts</span>
+                    <span><b>${locCount(d)}</b> loc</span>
+                    <span style="color:${c.state === 'scanning' ? 'var(--accent-text)' : 'var(--text-dim)'}">${label}</span>
+                </span>
+            </div></td></tr>`;
+    }
+
+    const SORT_COLUMNS = [
+        { key: 'title',      label: 'Title',      width: '40%', cls: '' },
+        { key: 'location',   label: 'Location',   width: '22%', cls: 'col-loc' },
+        { key: 'department', label: 'Department', width: '18%', cls: 'col-dept' },
+        { key: 'is_new',     label: 'Unique',     width: '10%', cls: 'col-uniq' },
+        { key: 'posted',     label: 'Posted',     width: '12%', cls: 'col-posted text-right' },
+    ];
+    const tableHead = () => `<thead><tr>` + SORT_COLUMNS.map(c => {
+        const active = sortKey === c.key;
+        const caret = active ? (sortDir > 0 ? '↑' : '↓') : '↕';
+        return `<th class="${c.cls}" style="width:${c.width}" data-sort="${c.key}">${c.label}`
+             + ` <span class="sort-caret"${active ? ' style="color:var(--accent-text)"' : ''}>${caret}</span></th>`;
+    }).join('') + `</tr></thead>`;
+
+    function sortJobs(jobs) {
+        if (!sortKey) return jobs;
+        const value = j => {
+            if (sortKey === 'is_new') return j.is_new ? 1 : 0;
+            if (sortKey === 'posted') return j.posted ? Date.parse(j.posted) || 0 : 0;
+            return (j[sortKey] || '').toString().toLowerCase();
+        };
+        return [...jobs].sort((a, b) => {
+            const x = value(a), y = value(b);
+            return (x < y ? -1 : x > y ? 1 : 0) * sortDir;
+        });
+    }
+
+    function emptyHTML(message) {
+        return `<div class="h-full flex items-center justify-center font-mono text-[11px] text-[var(--text-dim)] px-6 text-center">${esc(message)}</div>`;
+    }
+
+    function tableHTML(target) {
+        let bodies = '';
+        if (target === 'ALL') {
+            const withJobs = state.companies.filter(c => jobsOf(c.domain).length);
+            if (!withJobs.length) {
+                return emptyHTML(state.running ? 'scanning…' : 'Enter a company web address above and press Start.');
+            }
+            withJobs.forEach(c => {
+                // grouped mode sorts within each company, never across them
+                const rows = sortJobs(jobsOf(c.domain).filter(matchesFilter));
+                bodies += `<tbody class="grouped ${collapsed.has(c.domain) ? 'collapsed' : ''}" data-company="${esc(c.domain)}">`
+                       + groupHeadHTML(c) + rows.map(jobRowHTML).join('') + `</tbody>`;
+            });
+        } else {
+            const rows = sortJobs(jobsOf(target).filter(matchesFilter));
+            if (!rows.length) return emptyHTML(state.running ? 'scanning…' : 'No postings yet.');
+            bodies = `<tbody data-company="${esc(target)}">` + rows.map(jobRowHTML).join('') + `</tbody>`;
+        }
+        return `<table class="data-table font-mono">${tableHead()}${bodies}</table>`;
+    }
+
+    function paneHTML(id) {
+        const isMain = id === 'MAIN';
+        const target = isMain ? activeTab : id;
+        const c = byDomain(target);
+        const title = isMain ? (activeTab === 'ALL' ? 'All companies' : activeTab) : id;
+        const count = activeTab === 'ALL' && isMain
+            ? state.companies.reduce((n, x) => n + jobsOf(x.domain).length, 0)
+            : jobsOf(target).length;
+        const stats = c ? `${c.source || '—'} · ${countNew(target)} new` : '';
+        return `<div class="pane-head font-mono text-[11px]" data-pane-head="${esc(id)}">
+                    <span class="pane-btn fold" data-fold="${esc(id)}" title="Fold into the title bar">${foldedPanes.has(id) ? '▸' : '▾'}</span>
+                    <span class="pane-title truncate">${esc(title)}</span>
+                    <span class="pane-stat">${count}</span>
+                    <span class="pane-stat truncate">${esc(stats)}</span>
+                    <span class="flex-1"></span>
+                    ${isMain ? '' : `<span class="pane-btn close" data-return="${esc(id)}" title="Return to the tab strip">×</span>`}
+                </div>
+                <div class="pane-body" data-pane-body="${esc(id)}">${tableHTML(target)}</div>`;
+    }
+
+    function renderDock() {
+        const geo = geometry(slots);
+        dockEl.innerHTML = '';
+        QUADS.forEach(q => {
+            const id = slots[q];
+            if (!id) return;
+            const tile = document.createElement('div');
+            tile.className = 'tile';
+            tile.dataset.quad = q; tile.dataset.tile = id;
+            Object.assign(tile.style, geo[q]);
+            const pane = document.createElement('div');
+            pane.className = 'pane'; pane.dataset.pane = id;
+            pane.innerHTML = paneHTML(id);
+            tile.appendChild(pane);
+            dockEl.appendChild(tile);
+        });
+        observePanes();
+    }
+
+    const ro = new ResizeObserver(entries => entries.forEach(e => {
+        const w = e.contentRect.width;
+        e.target.classList.toggle('narrow-1', w < 720 && w >= 560);
+        e.target.classList.toggle('narrow-2', w < 560 && w >= 430);
+        e.target.classList.toggle('narrow-3', w < 430);
+    }));
+    function observePanes() { document.querySelectorAll('.pane, .float').forEach(p => ro.observe(p)); }
+
+    /* ---------------- floating windows ---------------- */
+    const SNAP = 8, MIN_W = 420, MIN_H = 180;
+    const snap = v => Math.round(v / SNAP) * SNAP;
+
+    function renderFloats() {
+        floatLayer.innerHTML = '';
+        floats.forEach(f => {
+            const el = document.createElement('div');
+            el.className = 'float' + (foldedPanes.has(f.domain) ? ' folded' : '');
+            el.dataset.float = f.domain;
+            el.style.left = f.x + 'px'; el.style.top = f.y + 'px';
+            el.style.width = f.w + 'px'; el.style.height = f.h + 'px';
+            el.innerHTML = paneHTML(f.domain)
+                + '<div class="resize-e" data-resize="e"></div><div class="resize-s" data-resize="s"></div><div class="resize-h" data-resize="se"></div>';
+            floatLayer.appendChild(el);
+        });
+        observePanes();
+    }
+
+    function addFloat(domain, clientX, clientY) {
+        const r = workspace.getBoundingClientRect();
+        const w = Math.min(660, r.width - 40), h = Math.min(400, r.height - 40);
+        floats.push({
+            domain, w: snap(w), h: snap(h),
+            x: snap(clamp(clientX - r.left - w / 2, 0, Math.max(0, r.width - w))),
+            y: snap(clamp(clientY - r.top - 16, 0, Math.max(0, r.height - h))),
+        });
+        renderFloats();
+    }
+
+    /* ---------------- dragging: quadrants are the only snap targets ---------------- */
+    let drag = null;
+    const SNAP_BAND = 0.25;
+
+    function beginDrag(id, e, origin) {
+        drag = { id, origin, ghost: document.createElement('div'), quad: null };
+        drag.ghost.className = 'drag-ghost font-mono';
+        drag.ghost.textContent = id === 'MAIN' ? 'All companies' : id;
+        document.body.appendChild(drag.ghost);
+        moveGhost(e);
+        showGuides(true);
+        window.addEventListener('pointermove', onDragMove);
+        window.addEventListener('pointerup', onDragEnd, { once: true });
+    }
+    const moveGhost = e => { drag.ghost.style.left = (e.clientX + 12) + 'px'; drag.ghost.style.top = (e.clientY + 12) + 'px'; };
+
+    function showGuides(on) {
+        quadGuides.classList.toggle('on', on);
+        quadGuides.innerHTML = on ? QUADS.map(q =>
+            `<i style="left:${isRight(q) ? '50%' : '0%'};top:${isBottom(q) ? '50%' : '0%'};width:50%;height:50%"></i>`).join('') : '';
+    }
+
+    function computeQuad(x, y) {
+        const r = workspace.getBoundingClientRect();
+        if (x < r.left || x > r.right || y < r.top || y > r.bottom) return null;
+        const px = (x - r.left) / r.width, py = (y - r.top) / r.height;
+        const inBand = px < SNAP_BAND || px > 1 - SNAP_BAND || py < SNAP_BAND || py > 1 - SNAP_BAND;
+        if (!inBand) return null;
+        return (py > 0.5 ? 'b' : 't') + (px > 0.5 ? 'r' : 'l');
+    }
+
+    function previewRect(id, quad) {
+        const map = { ...slots };
+        QUADS.forEach(q => { if (map[q] === id) map[q] = null; });
+        map[quad] = id;
+        const geo = geometry(map)[quad];
+        const r = workspace.getBoundingClientRect();
+        const toPx = (v, total) => v.endsWith('%') ? parseFloat(v) / 100 * total : parseFloat(v);
+        return {
+            left: toPx(geo.left, r.width), top: toPx(geo.top, r.height),
+            width: geo.width.startsWith('calc') ? r.width : toPx(geo.width, r.width),
+            height: geo.height.startsWith('calc') ? r.height : toPx(geo.height, r.height),
+        };
+    }
+
+    function onDragMove(e) {
+        moveGhost(e);
+        drag.quad = computeQuad(e.clientX, e.clientY);
+        if (!drag.quad) { dropHint.style.display = 'none'; return; }
+        const rect = previewRect(drag.id, drag.quad);
+        dropHint.style.display = 'block';
+        dropHint.style.left = rect.left + 'px'; dropHint.style.top = rect.top + 'px';
+        dropHint.style.width = rect.width + 'px'; dropHint.style.height = rect.height + 'px';
+    }
+
+    function onDragEnd(e) {
+        window.removeEventListener('pointermove', onDragMove);
+        drag.ghost.remove();
+        dropHint.style.display = 'none';
+        showGuides(false);
+        const { id, origin } = drag;
+        const quad = computeQuad(e.clientX, e.clientY);
+        drag = null;
+
+        if (quad) {
+            const previous = slotOf(id);
+            const occupant = slots[quad];
+            detach(id, origin);
+            if (occupant && occupant !== id) {
+                if (previous) slots[previous] = occupant;
+                else if (occupant !== 'MAIN') {
+                    slots[quad] = null;
+                    if (!openTabs.includes(occupant)) openTabs.push(occupant);
+                } else {
+                    slots[previous || 'tl'] = occupant;
+                }
+            }
+            slots[quad] = id;
+        } else if (id !== 'MAIN') {
+            detach(id, origin);
+            addFloat(id, e.clientX, e.clientY);
+        }
+        renderDock(); renderFloats(); renderTabs(); renderQueue();
+    }
+
+    function detach(id, origin) {
+        if (origin === 'strip') openTabs = openTabs.filter(d => d !== id);
+        if (origin === 'dock') { const q = slotOf(id); if (q) slots[q] = null; }
+        if (origin === 'float') { const i = floats.findIndex(f => f.domain === id); if (i > -1) floats.splice(i, 1); }
+    }
+
+    function returnToStrip(id) {
+        const q = slotOf(id); if (q) slots[q] = null;
+        const i = floats.findIndex(f => f.domain === id); if (i > -1) floats.splice(i, 1);
+        if (!openTabs.includes(id) && totalViews() < MAX_VIEWS) openTabs.push(id);
+        renderDock(); renderFloats(); renderTabs(); renderQueue();
+    }
+
+    floatLayer.addEventListener('pointerdown', e => {
+        const el = e.target.closest('.float');
+        if (!el) return;
+        const f = floats.find(x => x.domain === el.dataset.float);
+        if (!f || e.target.closest('[data-fold]') || e.target.closest('[data-return]')) return;
+        const wr = workspace.getBoundingClientRect();
+        const handle = e.target.closest('[data-resize]');
+        if (handle) {
+            e.preventDefault();
+            const kind = handle.dataset.resize;
+            const move = ev => {
+                if (kind !== 's') f.w = snap(clamp(ev.clientX - wr.left - f.x, MIN_W, wr.width - f.x));
+                if (kind !== 'e') f.h = snap(clamp(ev.clientY - wr.top - f.y, MIN_H, wr.height - f.y));
+                el.style.width = f.w + 'px'; el.style.height = f.h + 'px';
+            };
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', () => window.removeEventListener('pointermove', move), { once: true });
+            return;
+        }
+        if (!e.target.closest('.pane-head')) return;
+        e.preventDefault();
+        let armed = false;
+        const move = ev => {
+            if (!armed && Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < 5) return;
+            armed = true;
+            window.removeEventListener('pointermove', move);
+            beginDrag(f.domain, ev, 'float');
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', () => window.removeEventListener('pointermove', move), { once: true });
+    });
+
+    document.addEventListener('pointerdown', e => {
+        const foldBtn = e.target.closest('[data-fold]');
+        if (foldBtn) {
+            const id = foldBtn.dataset.fold;
+            foldedPanes.has(id) ? foldedPanes.delete(id) : foldedPanes.add(id);
+            renderDock(); renderFloats();
+            e.stopPropagation();
+            return;
+        }
+        const ret = e.target.closest('[data-return]');
+        if (ret) { returnToStrip(ret.dataset.return); e.stopPropagation(); return; }
+
+        const head = e.target.closest('.pane-head[data-pane-head]');
+        if (head && head.closest('.tile')) {
+            const id = head.dataset.paneHead;
+            const startX = e.clientX, startY = e.clientY;
+            let started = false;
+            const pre = ev => {
+                if (started || Math.hypot(ev.clientX - startX, ev.clientY - startY) < 5) return;
+                started = true;
+                window.removeEventListener('pointermove', pre);
+                beginDrag(id, ev, 'dock');
+            };
+            window.addEventListener('pointermove', pre);
+            window.addEventListener('pointerup', () => window.removeEventListener('pointermove', pre), { once: true });
+        }
+    });
+
+    document.addEventListener('click', e => {
+        const th = e.target.closest('th[data-sort]');
+        if (th) {
+            const key = th.dataset.sort;
+            if (sortKey === key) { if (sortDir > 0) sortDir = -1; else { sortKey = null; sortDir = 1; } }
+            else { sortKey = key; sortDir = 1; }
+            refreshAll();
+            return;
+        }
+        const head = e.target.closest('.group-head');
+        if (!head) return;
+        const d = head.dataset.group;
+        collapsed.has(d) ? collapsed.delete(d) : collapsed.add(d);
+        refreshAll();
+    });
+
+    /* ===================================================================
+       tab strip
+       =================================================================== */
+    const tabStrip = document.getElementById('tabStrip');
+    function renderTabs() {
+        const totalJobs = state.companies.reduce((n, c) => n + jobsOf(c.domain).length, 0);
+        let html = `<div class="tab ${activeTab === 'ALL' ? 'active' : ''}" data-tab="ALL" style="cursor:pointer">
+                <span class="uppercase tracking-widest">All</span><span class="tab-count">${totalJobs}</span></div>`;
+        openTabs.forEach(d => {
+            if (!byDomain(d)) return;
+            html += `<div class="tab ${activeTab === d ? 'active' : ''}" data-tab="${esc(d)}" title="Drag to a quadrant to snap, anywhere else to float">
+                        <span>${esc(d)}</span><span class="tab-count">${jobsOf(d).length}</span>
+                        <span class="tab-close" data-close="${esc(d)}">×</span></div>`;
+        });
+        const out = totalViews() - openTabs.length;
+        if (out > 0) html += `<div class="tab" style="cursor:default"><span class="tab-count">${out} popped out</span></div>`;
+        tabStrip.innerHTML = html;
+    }
+
+    tabStrip.addEventListener('pointerdown', e => {
+        const closeBtn = e.target.closest('[data-close]');
+        if (closeBtn) {
+            openTabs = openTabs.filter(d => d !== closeBtn.dataset.close);
+            if (activeTab === closeBtn.dataset.close) activeTab = 'ALL';
+            renderTabs(); refreshAll();
+            return;
+        }
+        const tab = e.target.closest('[data-tab]');
+        if (!tab) return;
+        const id = tab.dataset.tab;
+        const startX = e.clientX, startY = e.clientY;
+        let started = false;
+        const pre = ev => {
+            if (started || Math.hypot(ev.clientX - startX, ev.clientY - startY) < 6) return;
+            if (id === 'ALL') return;
+            started = true;
+            window.removeEventListener('pointermove', pre);
+            beginDrag(id, ev, 'strip');
+        };
+        const up = () => {
+            window.removeEventListener('pointermove', pre);
+            if (!started) { activeTab = id; renderTabs(); refreshAll(); renderQueue(); }
+        };
+        window.addEventListener('pointermove', pre);
+        window.addEventListener('pointerup', up, { once: true });
+    });
+
+    /* ===================================================================
+       queue list
+       =================================================================== */
+    const STATE_CHAR  = { done: '●', scanning: '◐', queued: '○', failed: '×', stopped: '■' };
+    const STATE_COLOR = { done: 'var(--accent-green)', scanning: 'var(--accent-text)', queued: 'var(--text-dim)',
+                          failed: 'var(--accent-red)', stopped: 'var(--accent-warn)' };
+    function renderQueue() {
+        const list = document.getElementById('queueList');
+        list.innerHTML = '';
+        state.companies.forEach(c => {
+            const n = jobsOf(c.domain).length;
+            const label = c.state === 'queued' ? 'queued' : c.state === 'scanning' ? `… ${n}` : n;
+            const row = document.createElement('div');
+            row.className = 'queue-item py-2.5 px-4 flex items-center justify-between gap-2' + (activeTab === c.domain ? ' selected' : '');
+            row.innerHTML = `<span class="flex items-center gap-2.5 min-w-0">
+                    <span style="color:${STATE_COLOR[c.state] || 'var(--text-dim)'}">${STATE_CHAR[c.state] || '○'}</span>
+                    <span class="queue-name truncate text-[var(--text-muted)]">${esc(c.domain)}</span></span>
+                <span class="text-[var(--text-dim)] text-[11px] shrink-0">${label}</span>`;
+            row.onclick = () => {
+                const placed = openTabs.includes(c.domain) || dockedIds().includes(c.domain) || floats.some(f => f.domain === c.domain);
+                if (!placed) {
+                    if (totalViews() >= MAX_VIEWS) openTabs.shift();
+                    openTabs.push(c.domain);
+                }
+                activeTab = c.domain;
+                renderTabs(); refreshAll(); renderQueue();
+            };
+            list.appendChild(row);
+        });
+        const done = state.companies.filter(c => c.state === 'done').length;
+        document.getElementById('queueCount').innerText = `${done}/${state.companies.length}`;
+        document.getElementById('sessionLine').innerText =
+            `${state.companies.length} companies · ${state.companies.reduce((n, c) => n + jobsOf(c.domain).length, 0)} jobs`;
+    }
+
+    /* ===================================================================
+       run controls
+       =================================================================== */
+    const pixelChar = document.getElementById('pixelChar');
+    const processLabel = document.getElementById('processLabel');
+    const processSub = document.getElementById('processSub');
+    const runBtn = document.getElementById('runBtn');
+    const addressInput = document.getElementById('addressInput');
+
+    function paintRunState() {
+        const scanning = state.companies.filter(c => c.state === 'scanning').length;
+        if (state.running) {
+            pixelChar.className = 'pixel-char char-active';
+            processLabel.innerText = 'Scanning'; processLabel.style.color = 'var(--accent-text)';
+            processSub.innerText = scanning === 1 ? '1 company' : `${scanning} companies`;
+            runBtn.innerText = 'Stop';
+            runBtn.className = 'btn btn-stop font-mono text-[11px] tracking-widest uppercase px-6 py-2';
+        } else {
+            pixelChar.className = 'pixel-char char-idle';
+            processLabel.innerText = 'Idle'; processLabel.style.color = 'var(--text-muted)';
+            const stopped = state.companies.some(c => c.state === 'stopped');
+            const failed = state.companies.some(c => c.state === 'failed');
+            processSub.innerText = !state.companies.length ? 'ready'
+                : stopped ? 'stopped' : failed ? 'finished with errors' : 'complete';
+            runBtn.innerText = 'Start';
+            runBtn.className = 'btn btn-primary font-mono text-[11px] tracking-widest uppercase px-6 py-2';
+        }
+    }
+
+    const runOptions = () => ({
+        fresh: !!cfg.fresh, max_jobs: cfg.maxJobs, max_enrich: cfg.maxEnrich,
+        concurrency: cfg.concurrency, autosave: !!cfg.autosave,
+    });
+
+    async function startRun() {
+        const urls = addressInput.value.split(/[\s,]+/).filter(Boolean);
+        addressInput.value = '';
+        try {
+            const res = await api.post('/api/run', { urls, options: runOptions() });
+            if (!res.started) logLine('nothing to scan — add a company web address first');
+        } catch (e) { logLine('could not reach the local server'); }
+    }
+
+    runBtn.addEventListener('click', () => state.running ? api.post('/api/stop') : startRun());
+    document.getElementById('processToggleBtn').addEventListener('click', () => state.running ? api.post('/api/stop') : startRun());
+    document.getElementById('addBtn').addEventListener('click', async () => {
+        const urls = addressInput.value.split(/[\s,]+/).filter(Boolean);
+        if (!urls.length) return;
+        addressInput.value = '';
+        await api.post('/api/queue', { urls });
+    });
+    addressInput.addEventListener('keydown', e => { if (e.key === 'Enter') startRun(); });
+    document.getElementById('quitBtn').addEventListener('click', async () => {
+        logLine('quitting…');
+        try { await api.post('/api/quit'); } catch (e) {}
+        setTimeout(() => window.close(), 300);
+    });
+
+    /* metrics */
+    const speedBar = document.getElementById('speedBar');
+    const speedValue = document.getElementById('speedValue');
+    const elapsedEl = document.getElementById('elapsed');
+    const jobsFoundEl = document.getElementById('jobsFound');
+    let currentLoad = 0, targetLoad = 0;
+
+    setInterval(() => {
+        if (!state.running) return;
+        state.elapsed++;
+        elapsedEl.innerText = `${String(Math.floor(state.elapsed / 60)).padStart(2, '0')}:${String(state.elapsed % 60).padStart(2, '0')}`;
+    }, 1000);
+
+    (function animate() {
+        currentLoad += (targetLoad - currentLoad) * 0.08;
+        speedBar.style.width = `${currentLoad}%`;
+        speedValue.innerText = `${Math.round(currentLoad)}%`;
+        requestAnimationFrame(animate);
+    })();
+
+    function paintMetrics() {
+        const found = state.companies.reduce((n, c) => n + jobsOf(c.domain).length, 0);
+        jobsFoundEl.innerText = found;
+        const total = state.companies.length || 1;
+        const finished = state.companies.filter(c => ['done', 'failed', 'stopped'].includes(c.state)).length;
+        targetLoad = Math.round((finished / total) * 100);
+    }
+
+    /* activity strip */
+    const activityBody = document.getElementById('activityBody');
+    const activityLatest = document.getElementById('activityLatest');
+    const activityCaret = document.getElementById('activityCaret');
+    document.getElementById('activityHead').addEventListener('click', () => {
+        activityCaret.innerText = activityBody.classList.toggle('open') ? '▾' : '▸';
+    });
+    function logLine(text) {
+        activityLatest.innerText = text;
+        const line = document.createElement('div');
+        line.className = 'py-0.5'; line.innerText = `› ${text}`;
+        activityBody.appendChild(line);
+        while (activityBody.childElementCount > 500) activityBody.removeChild(activityBody.firstChild);
+        activityBody.scrollTop = activityBody.scrollHeight;
+    }
+
+    /* ===================================================================
+       streaming rows into whatever surfaces are showing them
+       =================================================================== */
+    function appendJobs(domain, jobs) {
+        if (sortKey) return false;          // sorted view: rebuild so new rows land in order
+        const bodies = document.querySelectorAll(`tbody[data-company="${CSS.escape(domain)}"]`);
+        if (!bodies.length) return false;               // no surface has a body yet: rebuild
+        const visible = jobs.filter(matchesFilter);
+        if (!visible.length) return true;
+        bodies.forEach(tb => {
+            if (tb.classList.contains('collapsed')) return;
+            const frag = document.createDocumentFragment();
+            visible.forEach(job => {
+                const tr = document.createElement('tr');
+                tr.className = 'job-row row-enter';
+                tr.innerHTML = jobRowHTML(job).replace(/^<tr class="job-row">|<\/tr>$/g, '');
+                frag.appendChild(tr);
+            });
+            tb.appendChild(frag);
+        });
+        return true;
+    }
+
+    function refreshHeads() {
+        document.querySelectorAll('tbody.grouped[data-company]').forEach(tb => {
+            const c = byDomain(tb.dataset.company);
+            const head = tb.querySelector('.group-head');
+            if (c && head) head.outerHTML = groupHeadHTML(c);
+        });
+        document.querySelectorAll('.pane-head[data-pane-head]').forEach(h => {
+            const id = h.dataset.paneHead;
+            const target = id === 'MAIN' ? activeTab : id;
+            const countEl = h.querySelector('.pane-stat');
+            if (!countEl) return;
+            countEl.textContent = (target === 'ALL')
+                ? state.companies.reduce((n, x) => n + jobsOf(x.domain).length, 0)
+                : jobsOf(target).length;
+        });
+    }
+
+    function refreshAll() { renderDock(); renderFloats(); }
+
+    /* ===================================================================
+       polling
+       =================================================================== */
+    let lastCompaniesKey = '';
+    async function poll() {
+        try {
+            const s = await api.get(`/api/state?since=${state.cursor}`);
+            state.cursor = s.cursor;
+            const wasRunning = state.running;
+            state.running = s.running;
+            state.companies = s.companies || [];
+
+            let structural = false;
+            for (const ev of (s.events || [])) {
+                if (ev.kind === 'reset') {
+                    state.jobs[ev.domain] = [];          // a re-scan replaces rows, never stacks them
+                    structural = true;
+                } else if (ev.kind === 'jobs') {
+                    jobsOf(ev.domain).push(...ev.jobs);
+                    if (!appendJobs(ev.domain, ev.jobs)) structural = true;
+                } else if (ev.kind === 'log') {
+                    logLine(ev.text);
+                } else {
+                    structural = true;
+                }
+            }
+
+            // open a tab for any company we have not placed yet
+            state.companies.forEach(c => {
+                const placed = openTabs.includes(c.domain) || dockedIds().includes(c.domain) || floats.some(f => f.domain === c.domain);
+                if (!placed && totalViews() < MAX_VIEWS) { openTabs.push(c.domain); structural = true; }
+            });
+
+            const key = state.companies.map(c => `${c.domain}:${c.state}:${c.source}`).join('|');
+            if (key !== lastCompaniesKey) { lastCompaniesKey = key; structural = true; }
+
+            if (state.running && !wasRunning) state.elapsed = 0;
+            if (structural) { renderTabs(); renderQueue(); refreshAll(); }
+            else { renderTabs(); renderQueue(); refreshHeads(); }
+            paintRunState(); paintMetrics();
+        } catch (e) {
+            processLabel.innerText = 'Offline';
+            processLabel.style.color = 'var(--accent-red)';
+        }
+        setTimeout(poll, 400);
+    }
+
+    /* ===================================================================
+       history + output views
+       =================================================================== */
+    async function loadHistory() {
+        const body = document.getElementById('historyBody');
+        try {
+            const { runs } = await api.get('/api/history');
+            body.innerHTML = runs.length ? runs.map(r => `<tr class="job-row" data-run="${r.id}">
+                <td><a href="#" class="job-title">${esc(r.domain)}</a></td>
+                <td class="text-[var(--text-muted)]">${esc(r.source || '—')}</td>
+                <td class="text-[var(--text-muted)]">${r.jobs_count}</td>
+                <td style="color:var(--accent-green)">${r.new_count}</td>
+                <td class="text-right text-[var(--text-dim)]">${relTime(r.finished_at || r.started_at)}</td></tr>`).join('')
+                : `<tr><td colspan="5" class="text-[var(--text-dim)]">No previous runs yet.</td></tr>`;
+        } catch (e) { body.innerHTML = `<tr><td colspan="5" class="text-[var(--accent-red)]">Could not load history.</td></tr>`; }
+    }
+
+    document.getElementById('historyBody').addEventListener('click', async e => {
+        const row = e.target.closest('[data-run]');
+        if (!row) return;
+        e.preventDefault();
+        const { jobs } = await api.get(`/api/run-jobs?id=${row.dataset.run}`);
+        const domain = row.querySelector('.job-title').textContent;
+        state.jobs[domain] = jobs;
+        if (!byDomain(domain)) state.companies.push({ domain, company: domain, state: 'done', source: 'history' });
+        if (!openTabs.includes(domain) && !dockedIds().includes(domain) && !floats.some(f => f.domain === domain)) {
+            if (totalViews() >= MAX_VIEWS) openTabs.shift();
+            openTabs.push(domain);
+        }
+        activeTab = domain;
+        document.querySelector('.nav-link[data-view="scraper"]').click();
+        renderTabs(); renderQueue(); refreshAll();
+    });
+
+    async function loadOutput() {
+        const body = document.getElementById('outputBody');
+        try {
+            const { files } = await api.get('/api/output');
+            body.innerHTML = files.length ? files.map(f => `<tr class="job-row">
+                <td><span class="job-title">${esc(f.name)}</span></td>
+                <td class="text-[var(--text-muted)]">${f.rows ?? '—'}</td>
+                <td class="text-[var(--text-muted)]">${esc(f.size)}</td>
+                <td class="text-right text-[var(--text-dim)]">${relTime(new Date(f.written * 1000))}</td></tr>`).join('')
+                : `<tr><td colspan="4" class="text-[var(--text-dim)]">Nothing written yet.</td></tr>`;
+        } catch (e) { body.innerHTML = `<tr><td colspan="4" class="text-[var(--accent-red)]">Could not list output.</td></tr>`; }
+    }
+
+    document.getElementById('openFolderBtn').addEventListener('click', () => api.post('/api/open-folder'));
+    document.getElementById('exportAllBtn').addEventListener('click', async () => {
+        const res = await api.post('/api/export');
+        logLine(res.written ? `exported ${res.rows} rows to ${res.written}` : 'nothing to export yet');
+        loadOutput();
+    });
+
+    document.getElementById('filterInput').addEventListener('input', e => {
+        filterText = e.target.value.trim().toLowerCase();
+        refreshAll();
+    });
+
+    /* boot */
+    applyCfg();
+    renderTabs(); renderQueue(); renderDock(); renderFloats(); paintRunState();
+    poll();
+
+    </script>
+</body>
+</html>

@@ -50,6 +50,7 @@ def fetch_jobs(detection, site):
             location=(job.get("location") or {}).get("name"),
             remote=_remote(job),
             department=department_of.get(job.get("id")),
+            posted=job.get("first_published") or job.get("updated_at"),
             source="greenhouse",
         ))
     return jobs

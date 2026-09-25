@@ -30,8 +30,17 @@ class Settings:
     max_jobs = 2000       # cap for very large boards (e.g. Workday tenants)
     max_enrich = 50       # job pages to open when reading JSON-LD in the generic fallback
 
+    # Set by the UI: a shared Chrome renderer, a log sink, and a cancellation flag.
+    renderer = None       # callable(url) -> page dict, replacing the standalone Chrome
+    log_sink = None       # callable(message) called for every log line
+    cancel_event = None   # threading.Event; when set, fetching stops as soon as possible
+
 
 settings = Settings()
+
+
+def should_stop():
+    return bool(settings.cancel_event and settings.cancel_event.is_set())
 
 TIMEOUT = 25            # seconds per HTTP request
 DEADLINE = 60           # hard cap per fetch, including any retries inside botasaurus_requests
@@ -55,6 +64,11 @@ _QUIET = dict(
 
 def log(message):
     print(f"[knowitall] {message}", flush=True)
+    if settings.log_sink:
+        try:
+            settings.log_sink(str(message))
+        except Exception:
+            pass  # a failing UI log must never break a scrape
 
 
 @lru_cache(maxsize=1024)
@@ -117,6 +131,8 @@ def _send(req, method, url, headers=None, json=None):
 
 @request(**_QUIET)
 def _fetch_page(req: Request, url):
+    if should_stop():
+        return DontCache(_page(url, error="stopped"))
     if not host_resolves(urlparse(url).hostname or ""):
         return _page(url, error="host does not resolve")
     try:
@@ -133,6 +149,8 @@ def _fetch_page(req: Request, url):
 @request(**_QUIET)
 def _fetch_json(req: Request, spec):
     url = spec["url"]
+    if should_stop():
+        return DontCache({"status": 0, "data": None, "error": "stopped"})
     if not host_resolves(urlparse(url).hostname or ""):
         return {"status": 0, "data": None, "error": "host does not resolve"}
     headers = {"Accept": "application/json"}
@@ -184,9 +202,14 @@ def fetch_json_many(specs, parallel=4):
 
 
 def render_page(url):
-    """Load a page in (headless) Chrome. Returns an errored page if Chrome isn't available."""
+    """Load a page in Chrome. Uses the UI's shared browser when one is registered."""
+    if should_stop():
+        return _page(url, error="stopped")
     try:
-        page = _render_page(url, cache=settings.cache, headless=settings.headless)
+        if settings.renderer:
+            page = settings.renderer(url)
+        else:
+            page = _render_page(url, cache=settings.cache, headless=settings.headless)
     except Exception as error:
         page = None
         log(f"browser failed: {type(error).__name__}: {error}")

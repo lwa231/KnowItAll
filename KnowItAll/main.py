@@ -31,7 +31,7 @@ def print_summary(results, show):
             continue
         print(f"== {result['company']} ({result['domain']}) ==")
         print(f"   careers page : {result['careers_pages'][0] if result['careers_pages'] else 'not found'}")
-        print(f"   source       : {result['source'] or '-'}")
+        print(f"   source       : {result.get('source_detail') or result.get('source') or '-'}")
         for note in result["notes"]:
             print(f"   note         : {note}")
         print(f"   jobs         : {len(result['jobs'])}", end="")
