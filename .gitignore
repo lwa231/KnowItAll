@@ -1,1 +1,23 @@
-botasaurus/
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Botasaurus working folders
+output/
+cache/
+profiles/
+profiles.json
+error_logs/
+
+# App data and builds
+history.db
+history.db-wal
+history.db-shm
+build/
+dist/
+
+# OS
+.DS_Store
+Thumbs.db
