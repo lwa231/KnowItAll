@@ -1,0 +1,89 @@
+{
+  "EUROPE": {
+    "countries": ["AD", "AL", "AT", "AX", "BA", "BE", "BG", "BY", "CH", "CY", "CZ", "DE", "DK", "EE", "ES", "FI",
+                  "FO", "FR", "GB", "GG", "GI", "GR", "HR", "HU", "IE", "IM", "IS", "IT", "JE", "LI", "LT", "LU",
+                  "LV", "MC", "MD", "ME", "MK", "MT", "NL", "NO", "PL", "PT", "RO", "RS", "RU", "SE", "SI", "SJ",
+                  "SK", "SM", "UA", "VA", "XK"]
+  },
+  "MIDDLE_EAST": {
+    "countries": ["AE", "BH", "EG", "IL", "IQ", "IR", "JO", "KW", "LB", "OM", "PS", "QA", "SA", "SY", "TR", "YE"]
+  },
+  "AFRICA": {
+    "countries": ["AO", "BF", "BI", "BJ", "BW", "CD", "CF", "CG", "CI", "CM", "CV", "DJ", "DZ", "EH", "ER", "ET",
+                  "GA", "GH", "GM", "GN", "GQ", "GW", "KE", "KM", "LR", "LS", "LY", "MA", "MG", "ML", "MR", "MU",
+                  "MW", "MZ", "NA", "NE", "NG", "RE", "RW", "SC", "SD", "SH", "SL", "SN", "SO", "SS", "ST", "SZ",
+                  "TD", "TG", "TN", "TZ", "UG", "YT", "ZA", "ZM", "ZW"]
+  },
+  "ASIA_PACIFIC": {
+    "countries": ["AF", "AS", "AU", "BD", "BN", "BT", "CK", "CN", "FJ", "FM", "GU", "HK", "ID", "IN", "JP", "KG",
+                  "KH", "KI", "KP", "KR", "KZ", "LA", "LK", "MH", "MM", "MN", "MO", "MP", "MV", "MY", "NC", "NP",
+                  "NR", "NZ", "PF", "PG", "PH", "PK", "PW", "SB", "SG", "TH", "TJ", "TL", "TM", "TO", "TV", "TW",
+                  "UZ", "VN", "VU", "WS"]
+  },
+  "LATIN_AMERICA": {
+    "countries": ["AG", "AI", "AR", "AW", "BB", "BL", "BM", "BO", "BQ", "BR", "BS", "BZ", "CL", "CO", "CR", "CU",
+                  "CW", "DM", "DO", "EC", "FK", "GD", "GF", "GP", "GT", "GY", "HN", "HT", "JM", "KN", "KY", "LC",
+                  "MF", "MQ", "MS", "MX", "NI", "PA", "PE", "PR", "PY", "SR", "SV", "SX", "TC", "TT", "UY", "VC",
+                  "VE", "VG", "VI"]
+  },
+  "NORTH_AMERICA": {
+    "countries": ["CA", "US"]
+  },
+  "EMEA": {
+    "label": "Europe, Middle East & Africa",
+    "aliases": ["EMEA"],
+    "includes": ["EUROPE", "MIDDLE_EAST", "AFRICA"]
+  },
+  "APAC": {
+    "label": "Asia-Pacific",
+    "aliases": ["APAC", "Asia Pacific", "Asia-Pacific", "APJ"],
+    "includes": ["ASIA_PACIFIC"]
+  },
+  "LATAM": {
+    "label": "Latin America",
+    "aliases": ["LATAM", "LatAm", "Latin America"],
+    "includes": ["LATIN_AMERICA"]
+  },
+  "NORAM": {
+    "label": "North America",
+    "aliases": ["NORAM", "North America", "NAM"],
+    "includes": ["NORTH_AMERICA"]
+  },
+  "AMERICAS": {
+    "label": "The Americas",
+    "aliases": ["Americas", "The Americas"],
+    "includes": ["NORTH_AMERICA", "LATIN_AMERICA"]
+  },
+  "EU": {
+    "label": "European Union",
+    "aliases": ["EU", "European Union"],
+    "countries": ["AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV",
+                  "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE"]
+  },
+  "DACH": {
+    "label": "Germany, Austria & Switzerland",
+    "aliases": ["DACH"],
+    "countries": ["DE", "AT", "CH"]
+  },
+  "NORDICS": {
+    "label": "Nordic countries",
+    "aliases": ["Nordics", "Nordic", "Scandinavia"],
+    "countries": ["DK", "FI", "IS", "NO", "SE"]
+  },
+  "UKI": {
+    "label": "United Kingdom & Ireland",
+    "aliases": ["UK&I", "UKI", "UK & Ireland", "UK and Ireland"],
+    "countries": ["GB", "IE"]
+  },
+  "ANZ": {
+    "label": "Australia & New Zealand",
+    "aliases": ["ANZ"],
+    "countries": ["AU", "NZ"]
+  },
+  "MENA": {
+    "label": "Middle East & North Africa",
+    "aliases": ["MENA"],
+    "countries": ["AE", "BH", "DZ", "EG", "EH", "IL", "IQ", "IR", "JO", "KW", "LB", "LY", "MA", "MR", "OM", "PS",
+                  "QA", "SA", "SD", "SY", "TN", "TR", "YE"]
+  }
+}

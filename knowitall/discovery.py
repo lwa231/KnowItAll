@@ -6,7 +6,8 @@ from urllib.parse import urljoin, urlparse
 from botasaurus.sitemap import Filters, Sitemap
 
 from .fetch import (
-    _run_with_deadline, fetch_page, fetch_pages, log, page_ok, page_title, render_page, settings, soup_of,
+    BLOCKED_STATUS, _run_with_deadline, fetch_page, fetch_pages, needs_browser, page_ok, page_title, render_page,
+    soup_of,
 )
 from .normalize import url_key
 
@@ -31,7 +32,6 @@ ATS_HOST_RE = re.compile(r"greenhouse\.io|lever\.co|ashbyhq\.com|smartrecruiters
 # Two-part public suffixes like co.uk / com.au, so "shop.example.co.uk" -> "example.co.uk".
 SECOND_LEVEL_LABELS = {"co", "com", "org", "net", "ac", "gov", "edu", "ltd", "plc"}
 
-BLOCKED_STATUS = {403, 429, 503}  # bot protection: worth retrying in a real browser
 
 MAX_HOMEPAGE_LINKS = 10
 MAX_CANDIDATES = 3
@@ -128,38 +128,38 @@ def _final_score(page, base_score):
     return score
 
 
-def _sitemap_urls(site):
+def _sitemap_urls(ctx, site):
     try:
         links = _run_with_deadline(
-            lambda: Sitemap(site.root_url, cache=settings.cache is True)
+            lambda: Sitemap(site.root_url, cache=ctx.config.cache is True)
             .filter(Filters.any_segment_equals(["careers", "career", "jobs", "job"]))
             .links(),
             seconds=90,
         )
     except Exception as error:
-        log(f"sitemap lookup failed: {type(error).__name__}")
+        ctx.log(f"sitemap lookup failed: {type(error).__name__}")
         return []
     return sorted(links or [], key=lambda url: (len(urlparse(url).path.split("/")), len(url)))[:5]
 
 
-def discover(site):
+def discover(ctx, site):
     """Return (homepage, candidates). Candidates are page dicts with 'score' and 'reasons', best first."""
-    home = fetch_page(site.root_url)
+    home = fetch_page(ctx, site.root_url)
     if not page_ok(home) and not site.host.startswith("www."):
-        www_home = fetch_page(f"https://www.{site.host}/")
+        www_home = fetch_page(ctx, f"https://www.{site.host}/")
         if page_ok(www_home):
             home = www_home
     if unreachable(home):
         return home, []
-    if settings.use_browser and _needs_browser(home):
-        log("homepage is blocked or JavaScript-only; loading it in Chrome")
-        rendered = render_page(site.root_url)
+    if ctx.config.use_browser and needs_browser(home):
+        ctx.log("homepage is blocked or JavaScript-only; loading it in Chrome")
+        rendered = render_page(ctx, site.root_url)
         if page_ok(rendered):
             home = rendered
     if page_ok(home):
-        log(f"homepage: {home['final_url']} ({home['status']})")
+        ctx.log(f"homepage: {home['final_url']} ({home['status']})")
     else:
-        log(f"homepage could not be loaded ({home.get('status')} {home.get('error') or ''})".strip())
+        ctx.log(f"homepage could not be loaded ({home.get('status')} {home.get('error') or ''})".strip())
 
     to_fetch = {}  # url -> (base score, reason)
 
@@ -177,17 +177,17 @@ def discover(site):
     for sub in ("careers", "jobs"):
         want(f"https://{sub}.{site.domain}/", 0, f"{sub}.{site.domain} subdomain")
 
-    candidates = _collect(fetch_pages(list(to_fetch)), to_fetch, home, site)
+    candidates = _collect(fetch_pages(ctx, list(to_fetch)), to_fetch, home, site)
     if not candidates:
-        log("no careers page found via links or common paths; checking the sitemap")
-        sitemap_urls = _sitemap_urls(site)
-        candidates = _collect(fetch_pages(sitemap_urls), {u: (5, "sitemap") for u in sitemap_urls}, home, site)
+        ctx.log("no careers page found via links or common paths; checking the sitemap")
+        sitemap_urls = _sitemap_urls(ctx, site)
+        candidates = _collect(fetch_pages(ctx, sitemap_urls), {u: (5, "sitemap") for u in sitemap_urls}, home, site)
 
     candidates = candidates[:MAX_CANDIDATES]
     for i, candidate in enumerate(candidates):
-        if candidate.get("blocked") and settings.use_browser:
-            log(f"{candidate['final_url']} refused plain requests ({candidate['status']}); loading it in Chrome")
-            rendered = render_page(candidate["final_url"])
+        if candidate.get("blocked") and ctx.config.use_browser:
+            ctx.log(f"{candidate['final_url']} refused plain requests ({candidate['status']}); loading it in Chrome")
+            rendered = render_page(ctx, candidate["final_url"])
             if page_ok(rendered):
                 candidates[i] = {**rendered, "score": candidate["score"], "reasons": candidate["reasons"]}
     return home, [c for c in candidates if page_ok(c)]
@@ -195,12 +195,6 @@ def discover(site):
 
 def unreachable(home):
     return home.get("error") == "host does not resolve"
-
-
-def _needs_browser(home):
-    if home.get("status") in BLOCKED_STATUS:
-        return True
-    return page_ok(home) and len(soup_of(home).find_all("a", href=True)) < 5
 
 
 def _collect(pages, to_fetch, home, site):

@@ -1,0 +1,28 @@
+[
+ {
+  "text": "Data Scientist",
+  "hostedUrl": "https://jobs.lever.co/acme/aaa",
+  "categories": {
+   "location": "London",
+   "allLocations": [
+    "London",
+    "Berlin"
+   ],
+   "team": "Data",
+   "commitment": "Full-time"
+  },
+  "workplaceType": "hybrid",
+  "createdAt": 1740000000000,
+  "country": "GB"
+ },
+ {
+  "text": "Support Agent",
+  "hostedUrl": "https://jobs.lever.co/acme/bbb",
+  "categories": {
+   "location": "Remote",
+   "commitment": "Intern"
+  },
+  "workplaceType": "remote",
+  "createdAt": 1741000000000
+ }
+]

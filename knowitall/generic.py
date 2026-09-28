@@ -4,7 +4,7 @@ import re
 from urllib.parse import parse_qsl, urlencode, urljoin, urlparse
 
 from .discovery import same_site
-from .fetch import fetch_pages, log, page_ok, settings, soup_of
+from .fetch import fetch_pages, page_ok, soup_of
 from .normalize import clean, make_job, url_key
 
 # A link whose path looks like a single job posting, e.g. /jobs/senior-engineer-1234 or ?gh_jid=123
@@ -33,6 +33,7 @@ BARE_JOBS_TEXT_RE = re.compile(r"^(jobs|all jobs|job search|find jobs|openings|o
 JOBS_PATH_RE = re.compile(r"/(jobs?|positions|openings|vacancies|roles|job-search|search-jobs)(/|$)", re.I)
 PAGE_PARAM_RE = re.compile(r"^(page|p|pg|pagenum|page_num|pagenumber)$", re.I)
 MAX_LISTING_PAGES = 40
+ENRICH_BATCH = 25    # job pages opened (and streamed out) at a time
 GENERIC_LINK_TEXT = {
     "apply", "apply now", "learn more", "view job", "view", "read more", "see details", "details", "more",
     "view role", "see role", "view position", "view details", "see job", "careers", "jobs", "open positions",
@@ -94,8 +95,26 @@ def _ld_location(posting):
     return names
 
 
+def _ld_address(posting):
+    """The first structured address (locality/region/country) on a JobPosting, as make_job keywords."""
+    places = posting.get("jobLocation") or []
+    for place in places if isinstance(places, list) else [places]:
+        address = place.get("address") if isinstance(place, dict) else None
+        if isinstance(address, dict):
+            country = address.get("addressCountry")
+            country = country.get("name") if isinstance(country, dict) else country
+            return {"city": address.get("addressLocality"), "region": address.get("addressRegion"), "country": country}
+    return {}
+
+
+def _ld_employment_type(posting):
+    value = posting.get("employmentType")
+    return value[0] if isinstance(value, list) and value else value
+
+
 def job_from_ld(posting, page_url, site):
     remote = True if str(posting.get("jobLocationType", "")).upper() == "TELECOMMUTE" else None
+    address = {k: v if isinstance(v, str) else None for k, v in _ld_address(posting).items()}
     organization = posting.get("hiringOrganization")
     company = organization.get("name") if isinstance(organization, dict) else None
     url = posting.get("url")
@@ -107,7 +126,9 @@ def job_from_ld(posting, page_url, site):
         remote=remote,
         department=posting.get("occupationalCategory") or posting.get("industry"),
         posted=posting.get("datePosted"),
+        employment_type=_ld_employment_type(posting) if isinstance(_ld_employment_type(posting), str) else None,
         source="json-ld",
+        **address,
     )
 
 
@@ -168,8 +189,11 @@ def view_all_links(pages, site):
     return list(dict.fromkeys(urls))[:5]
 
 
-def pagination_urls(page):
-    """Other result pages of a paginated listing (?page=N style), e.g. careers.servicenow.com/jobs/?page=33."""
+def pagination_urls(page, capped=None):
+    """Other result pages of a paginated listing (?page=N style), e.g. careers.servicenow.com/jobs/?page=33.
+
+    Appends the real page count to `capped` when the listing is longer than MAX_LISTING_PAGES."""
+    capped = capped if capped is not None else []
     base = urlparse(page["final_url"])
     param, template, last = None, None, 1
     for a in soup_of(page).find_all("a", href=True):
@@ -181,6 +205,8 @@ def pagination_urls(page):
                 param, template, last = key, parts, int(value)
     if not param:
         return []
+    if last > MAX_LISTING_PAGES:
+        capped.append(last)
     last = min(last, MAX_LISTING_PAGES)
     urls = []
     for number in range(2, last + 1):
@@ -191,39 +217,51 @@ def pagination_urls(page):
 
 # ---------- entry point ----------
 
-def extract_jobs(pages, site):
+def extract_jobs(ctx, pages, site):
     """Jobs from listing pages: inline JSON-LD first, then job-looking links enriched with each job page's JSON-LD."""
     jobs = []
     candidates = {}
     pages = [p for p in pages if page_ok(p)]
     more_pages = []
+    capped = []
     for page in pages:
         if len(job_links(page, site)) >= 3:
-            more_pages += pagination_urls(page)
+            more_pages += pagination_urls(page, capped)
+    if capped:
+        ctx.mark_truncated(f"listing has {max(capped)} pages, read {MAX_LISTING_PAGES}")
     if more_pages:
-        log(f"listing is paginated; fetching {len(more_pages)} more result page(s)")
-        pages += [p for p in fetch_pages(more_pages) if page_ok(p)]
+        ctx.log(f"listing is paginated; fetching {len(more_pages)} more result page(s)")
+        pages += [p for p in fetch_pages(ctx, more_pages) if page_ok(p)]
 
     for page in pages:
         jobs.extend(job_from_ld(p, page["final_url"], site) for p in job_postings_in(page))
         for link in job_links(page, site):
             candidates.setdefault(url_key(link["url"]), link)
     if jobs:
-        log(f"found {len(jobs)} JobPosting entries embedded in the careers pages")
+        ctx.log(f"found {len(jobs)} JobPosting entries embedded in the careers pages")
+        ctx.emit(jobs)
 
     links = list(candidates.values())
     if not links:
         return jobs
-    to_open = links[: settings.max_enrich]
-    log(f"found {len(links)} job-looking links; opening {len(to_open)} to read their JobPosting data")
-    detail_pages = fetch_pages([link["url"] for link in to_open])
-    detail_by_key = {url_key(p["url"]): p for p in detail_pages if p}
+    ctx.log(f"found {len(links)} job-looking links; opening {min(len(links), ctx.config.max_enrich)} "
+            "to read their JobPosting data")
 
-    for link in links:
-        detail = detail_by_key.get(url_key(link["url"]))
-        postings = job_postings_in(detail) if page_ok(detail) else []
-        if postings:
-            jobs.append(job_from_ld(postings[0], detail["final_url"], site))
-        else:
-            jobs.append(make_job(site.name, link["title"], link["url"], link["location"], source="html-heuristic"))
+    # Open the job pages a batch at a time so results appear while the rest are still being read.
+    for start in range(0, len(links), ENRICH_BATCH):
+        if ctx.should_stop():
+            break
+        chunk = links[start:start + ENRICH_BATCH]
+        to_open = [link["url"] for index, link in enumerate(chunk, start) if index < ctx.config.max_enrich]
+        details = {url_key(p["url"]): p for p in fetch_pages(ctx, to_open) if p}
+        batch = []
+        for link in chunk:
+            detail = details.get(url_key(link["url"]))
+            postings = job_postings_in(detail) if page_ok(detail) else []
+            if postings:
+                batch.append(job_from_ld(postings[0], detail["final_url"], site))
+            else:
+                batch.append(make_job(site.name, link["title"], link["url"], link["location"], source="html-heuristic"))
+        jobs.extend(batch)
+        ctx.emit(batch)
     return jobs

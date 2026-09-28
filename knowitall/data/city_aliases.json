@@ -1,0 +1,1619 @@
+{
+ "cities": [
+  {
+   "name": "New York",
+   "country": "US",
+   "region": "New York",
+   "aliases": [
+    "NYC",
+    "New York City",
+    "New York, NY",
+    "Manhattan",
+    "Brooklyn"
+   ]
+  },
+  {
+   "name": "San Francisco",
+   "country": "US",
+   "region": "California",
+   "aliases": [
+    "SF",
+    "San Fran",
+    "SFO"
+   ]
+  },
+  {
+   "name": "Los Angeles",
+   "country": "US",
+   "region": "California",
+   "aliases": [
+    "LA",
+    "L.A."
+   ]
+  },
+  {
+   "name": "San Diego",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "Palo Alto",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "Mountain View",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "Sunnyvale",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "Menlo Park",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "Redwood City",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "Santa Clara",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "Cupertino",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "South San Francisco",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "San Mateo",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "Irvine",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "Santa Monica",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "Sacramento",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "Fremont",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "Berkeley",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "Emeryville",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "Los Gatos",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "Foster City",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "Burlingame",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "Culver City",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "El Segundo",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "Pasadena",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "Santa Barbara",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "Oakland",
+   "country": "US",
+   "region": "California",
+   "aliases": []
+  },
+  {
+   "name": "San Jose",
+   "country": "US",
+   "region": "California",
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Seattle",
+   "country": "US",
+   "region": "Washington",
+   "aliases": []
+  },
+  {
+   "name": "Bellevue",
+   "country": "US",
+   "region": "Washington",
+   "aliases": []
+  },
+  {
+   "name": "Redmond",
+   "country": "US",
+   "region": "Washington",
+   "aliases": []
+  },
+  {
+   "name": "Kirkland",
+   "country": "US",
+   "region": "Washington",
+   "aliases": []
+  },
+  {
+   "name": "Austin",
+   "country": "US",
+   "region": "Texas",
+   "aliases": []
+  },
+  {
+   "name": "Dallas",
+   "country": "US",
+   "region": "Texas",
+   "aliases": []
+  },
+  {
+   "name": "Houston",
+   "country": "US",
+   "region": "Texas",
+   "aliases": []
+  },
+  {
+   "name": "San Antonio",
+   "country": "US",
+   "region": "Texas",
+   "aliases": []
+  },
+  {
+   "name": "Plano",
+   "country": "US",
+   "region": "Texas",
+   "aliases": []
+  },
+  {
+   "name": "Irving",
+   "country": "US",
+   "region": "Texas",
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Boston",
+   "country": "US",
+   "region": "Massachusetts",
+   "aliases": []
+  },
+  {
+   "name": "Cambridge",
+   "country": "US",
+   "region": "Massachusetts",
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Somerville",
+   "country": "US",
+   "region": "Massachusetts",
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Waltham",
+   "country": "US",
+   "region": "Massachusetts",
+   "aliases": []
+  },
+  {
+   "name": "Chicago",
+   "country": "US",
+   "region": "Illinois",
+   "aliases": []
+  },
+  {
+   "name": "Denver",
+   "country": "US",
+   "region": "Colorado",
+   "aliases": []
+  },
+  {
+   "name": "Boulder",
+   "country": "US",
+   "region": "Colorado",
+   "aliases": []
+  },
+  {
+   "name": "Atlanta",
+   "country": "US",
+   "region": "Georgia",
+   "aliases": []
+  },
+  {
+   "name": "Miami",
+   "country": "US",
+   "region": "Florida",
+   "aliases": []
+  },
+  {
+   "name": "Orlando",
+   "country": "US",
+   "region": "Florida",
+   "aliases": []
+  },
+  {
+   "name": "Tampa",
+   "country": "US",
+   "region": "Florida",
+   "aliases": []
+  },
+  {
+   "name": "Jacksonville",
+   "country": "US",
+   "region": "Florida",
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Washington, D.C.",
+   "country": "US",
+   "region": "District of Columbia",
+   "aliases": [
+    "Washington DC",
+    "Washington D.C.",
+    "DC",
+    "Washington, DC"
+   ]
+  },
+  {
+   "name": "Arlington",
+   "country": "US",
+   "region": "Virginia",
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Reston",
+   "country": "US",
+   "region": "Virginia",
+   "aliases": []
+  },
+  {
+   "name": "McLean",
+   "country": "US",
+   "region": "Virginia",
+   "aliases": []
+  },
+  {
+   "name": "Portland",
+   "country": "US",
+   "region": "Oregon",
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Phoenix",
+   "country": "US",
+   "region": "Arizona",
+   "aliases": []
+  },
+  {
+   "name": "Scottsdale",
+   "country": "US",
+   "region": "Arizona",
+   "aliases": []
+  },
+  {
+   "name": "Tempe",
+   "country": "US",
+   "region": "Arizona",
+   "aliases": []
+  },
+  {
+   "name": "Philadelphia",
+   "country": "US",
+   "region": "Pennsylvania",
+   "aliases": [
+    "Philly"
+   ]
+  },
+  {
+   "name": "Pittsburgh",
+   "country": "US",
+   "region": "Pennsylvania",
+   "aliases": []
+  },
+  {
+   "name": "Raleigh",
+   "country": "US",
+   "region": "North Carolina",
+   "aliases": []
+  },
+  {
+   "name": "Durham",
+   "country": "US",
+   "region": "North Carolina",
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Charlotte",
+   "country": "US",
+   "region": "North Carolina",
+   "aliases": []
+  },
+  {
+   "name": "Nashville",
+   "country": "US",
+   "region": "Tennessee",
+   "aliases": []
+  },
+  {
+   "name": "Salt Lake City",
+   "country": "US",
+   "region": "Utah",
+   "aliases": []
+  },
+  {
+   "name": "Lehi",
+   "country": "US",
+   "region": "Utah",
+   "aliases": []
+  },
+  {
+   "name": "Provo",
+   "country": "US",
+   "region": "Utah",
+   "aliases": []
+  },
+  {
+   "name": "Minneapolis",
+   "country": "US",
+   "region": "Minnesota",
+   "aliases": []
+  },
+  {
+   "name": "Detroit",
+   "country": "US",
+   "region": "Michigan",
+   "aliases": []
+  },
+  {
+   "name": "Ann Arbor",
+   "country": "US",
+   "region": "Michigan",
+   "aliases": []
+  },
+  {
+   "name": "Columbus",
+   "country": "US",
+   "region": "Ohio",
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Cleveland",
+   "country": "US",
+   "region": "Ohio",
+   "aliases": []
+  },
+  {
+   "name": "Cincinnati",
+   "country": "US",
+   "region": "Ohio",
+   "aliases": []
+  },
+  {
+   "name": "Baltimore",
+   "country": "US",
+   "region": "Maryland",
+   "aliases": []
+  },
+  {
+   "name": "Las Vegas",
+   "country": "US",
+   "region": "Nevada",
+   "aliases": []
+  },
+  {
+   "name": "Kansas City",
+   "country": "US",
+   "region": "Missouri",
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "St. Louis",
+   "country": "US",
+   "region": "Missouri",
+   "aliases": [
+    "Saint Louis",
+    "St Louis"
+   ]
+  },
+  {
+   "name": "Indianapolis",
+   "country": "US",
+   "region": "Indiana",
+   "aliases": []
+  },
+  {
+   "name": "Milwaukee",
+   "country": "US",
+   "region": "Wisconsin",
+   "aliases": []
+  },
+  {
+   "name": "Madison",
+   "country": "US",
+   "region": "Wisconsin",
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "New Orleans",
+   "country": "US",
+   "region": "Louisiana",
+   "aliases": []
+  },
+  {
+   "name": "Honolulu",
+   "country": "US",
+   "region": "Hawaii",
+   "aliases": []
+  },
+  {
+   "name": "Anchorage",
+   "country": "US",
+   "region": "Alaska",
+   "aliases": []
+  },
+  {
+   "name": "Richmond",
+   "country": "US",
+   "region": "Virginia",
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Toronto",
+   "country": "CA",
+   "region": "Ontario",
+   "aliases": []
+  },
+  {
+   "name": "Vancouver",
+   "country": "CA",
+   "region": "British Columbia",
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Montreal",
+   "country": "CA",
+   "region": "Quebec",
+   "aliases": [
+    "Montréal"
+   ]
+  },
+  {
+   "name": "Ottawa",
+   "country": "CA",
+   "region": "Ontario",
+   "aliases": []
+  },
+  {
+   "name": "Calgary",
+   "country": "CA",
+   "region": "Alberta",
+   "aliases": []
+  },
+  {
+   "name": "Edmonton",
+   "country": "CA",
+   "region": "Alberta",
+   "aliases": []
+  },
+  {
+   "name": "Waterloo",
+   "country": "CA",
+   "region": "Ontario",
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Kitchener",
+   "country": "CA",
+   "region": "Ontario",
+   "aliases": []
+  },
+  {
+   "name": "Mississauga",
+   "country": "CA",
+   "region": "Ontario",
+   "aliases": []
+  },
+  {
+   "name": "Quebec City",
+   "country": "CA",
+   "region": "Quebec",
+   "aliases": [
+    "Québec City"
+   ]
+  },
+  {
+   "name": "London",
+   "country": "GB",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Manchester",
+   "country": "GB",
+   "region": null,
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Edinburgh",
+   "country": "GB",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Glasgow",
+   "country": "GB",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Bristol",
+   "country": "GB",
+   "region": null,
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Leeds",
+   "country": "GB",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Birmingham",
+   "country": "GB",
+   "region": null,
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Cambridge",
+   "country": "GB",
+   "region": null,
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Oxford",
+   "country": "GB",
+   "region": null,
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Belfast",
+   "country": "GB",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Cardiff",
+   "country": "GB",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Reading",
+   "country": "GB",
+   "region": null,
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Dublin",
+   "country": "IE",
+   "region": null,
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Cork",
+   "country": "IE",
+   "region": null,
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Galway",
+   "country": "IE",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Limerick",
+   "country": "IE",
+   "region": null,
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Berlin",
+   "country": "DE",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Munich",
+   "country": "DE",
+   "region": null,
+   "aliases": [
+    "München"
+   ]
+  },
+  {
+   "name": "Hamburg",
+   "country": "DE",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Frankfurt",
+   "country": "DE",
+   "region": null,
+   "aliases": [
+    "Frankfurt am Main"
+   ]
+  },
+  {
+   "name": "Cologne",
+   "country": "DE",
+   "region": null,
+   "aliases": [
+    "Köln"
+   ]
+  },
+  {
+   "name": "Stuttgart",
+   "country": "DE",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Düsseldorf",
+   "country": "DE",
+   "region": null,
+   "aliases": [
+    "Dusseldorf"
+   ]
+  },
+  {
+   "name": "Paris",
+   "country": "FR",
+   "region": null,
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Lyon",
+   "country": "FR",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Marseille",
+   "country": "FR",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Toulouse",
+   "country": "FR",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Amsterdam",
+   "country": "NL",
+   "region": null,
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Rotterdam",
+   "country": "NL",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "The Hague",
+   "country": "NL",
+   "region": null,
+   "aliases": [
+    "Den Haag"
+   ]
+  },
+  {
+   "name": "Utrecht",
+   "country": "NL",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Eindhoven",
+   "country": "NL",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Brussels",
+   "country": "BE",
+   "region": null,
+   "aliases": [
+    "Bruxelles"
+   ]
+  },
+  {
+   "name": "Antwerp",
+   "country": "BE",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Zurich",
+   "country": "CH",
+   "region": null,
+   "aliases": [
+    "Zürich"
+   ]
+  },
+  {
+   "name": "Geneva",
+   "country": "CH",
+   "region": null,
+   "aliases": [
+    "Genève"
+   ],
+   "ambiguous": true
+  },
+  {
+   "name": "Basel",
+   "country": "CH",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Lausanne",
+   "country": "CH",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Vienna",
+   "country": "AT",
+   "region": null,
+   "aliases": [
+    "Wien"
+   ],
+   "ambiguous": true
+  },
+  {
+   "name": "Madrid",
+   "country": "ES",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Barcelona",
+   "country": "ES",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Valencia",
+   "country": "ES",
+   "region": null,
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Lisbon",
+   "country": "PT",
+   "region": null,
+   "aliases": [
+    "Lisboa"
+   ]
+  },
+  {
+   "name": "Porto",
+   "country": "PT",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Milan",
+   "country": "IT",
+   "region": null,
+   "aliases": [
+    "Milano"
+   ]
+  },
+  {
+   "name": "Rome",
+   "country": "IT",
+   "region": null,
+   "aliases": [
+    "Roma"
+   ],
+   "ambiguous": true
+  },
+  {
+   "name": "Turin",
+   "country": "IT",
+   "region": null,
+   "aliases": [
+    "Torino"
+   ]
+  },
+  {
+   "name": "Copenhagen",
+   "country": "DK",
+   "region": null,
+   "aliases": [
+    "København"
+   ]
+  },
+  {
+   "name": "Stockholm",
+   "country": "SE",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Gothenburg",
+   "country": "SE",
+   "region": null,
+   "aliases": [
+    "Göteborg"
+   ]
+  },
+  {
+   "name": "Oslo",
+   "country": "NO",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Helsinki",
+   "country": "FI",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Warsaw",
+   "country": "PL",
+   "region": null,
+   "aliases": [
+    "Warszawa"
+   ]
+  },
+  {
+   "name": "Krakow",
+   "country": "PL",
+   "region": null,
+   "aliases": [
+    "Kraków",
+    "Cracow"
+   ]
+  },
+  {
+   "name": "Wroclaw",
+   "country": "PL",
+   "region": null,
+   "aliases": [
+    "Wrocław"
+   ]
+  },
+  {
+   "name": "Gdansk",
+   "country": "PL",
+   "region": null,
+   "aliases": [
+    "Gdańsk"
+   ]
+  },
+  {
+   "name": "Prague",
+   "country": "CZ",
+   "region": null,
+   "aliases": [
+    "Praha"
+   ]
+  },
+  {
+   "name": "Budapest",
+   "country": "HU",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Bucharest",
+   "country": "RO",
+   "region": null,
+   "aliases": [
+    "București"
+   ]
+  },
+  {
+   "name": "Sofia",
+   "country": "BG",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Athens",
+   "country": "GR",
+   "region": null,
+   "aliases": [
+    "Athina"
+   ],
+   "ambiguous": true
+  },
+  {
+   "name": "Tallinn",
+   "country": "EE",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Riga",
+   "country": "LV",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Vilnius",
+   "country": "LT",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Belgrade",
+   "country": "RS",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Zagreb",
+   "country": "HR",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Bratislava",
+   "country": "SK",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Ljubljana",
+   "country": "SI",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Kyiv",
+   "country": "UA",
+   "region": null,
+   "aliases": [
+    "Kiev"
+   ]
+  },
+  {
+   "name": "Luxembourg City",
+   "country": "LU",
+   "region": null,
+   "aliases": [
+    "Luxembourg"
+   ]
+  },
+  {
+   "name": "Reykjavik",
+   "country": "IS",
+   "region": null,
+   "aliases": [
+    "Reykjavík"
+   ]
+  },
+  {
+   "name": "Istanbul",
+   "country": "TR",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Tel Aviv",
+   "country": "IL",
+   "region": null,
+   "aliases": [
+    "Tel Aviv-Yafo",
+    "Tel-Aviv"
+   ]
+  },
+  {
+   "name": "Jerusalem",
+   "country": "IL",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Haifa",
+   "country": "IL",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Dubai",
+   "country": "AE",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Abu Dhabi",
+   "country": "AE",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Riyadh",
+   "country": "SA",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Doha",
+   "country": "QA",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Cairo",
+   "country": "EG",
+   "region": null,
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Lagos",
+   "country": "NG",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Nairobi",
+   "country": "KE",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Cape Town",
+   "country": "ZA",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Johannesburg",
+   "country": "ZA",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Accra",
+   "country": "GH",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Casablanca",
+   "country": "MA",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Kigali",
+   "country": "RW",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Singapore",
+   "country": "SG",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Tokyo",
+   "country": "JP",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Osaka",
+   "country": "JP",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Seoul",
+   "country": "KR",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Beijing",
+   "country": "CN",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Shanghai",
+   "country": "CN",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Shenzhen",
+   "country": "CN",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Guangzhou",
+   "country": "CN",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Hangzhou",
+   "country": "CN",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Chengdu",
+   "country": "CN",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Hong Kong",
+   "country": "HK",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Taipei",
+   "country": "TW",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Bangalore",
+   "country": "IN",
+   "region": null,
+   "aliases": [
+    "Bengaluru"
+   ]
+  },
+  {
+   "name": "Hyderabad",
+   "country": "IN",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Mumbai",
+   "country": "IN",
+   "region": null,
+   "aliases": [
+    "Bombay"
+   ]
+  },
+  {
+   "name": "Pune",
+   "country": "IN",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Chennai",
+   "country": "IN",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Delhi",
+   "country": "IN",
+   "region": null,
+   "aliases": [
+    "New Delhi"
+   ]
+  },
+  {
+   "name": "Gurgaon",
+   "country": "IN",
+   "region": null,
+   "aliases": [
+    "Gurugram"
+   ]
+  },
+  {
+   "name": "Noida",
+   "country": "IN",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Kolkata",
+   "country": "IN",
+   "region": null,
+   "aliases": [
+    "Calcutta"
+   ]
+  },
+  {
+   "name": "Ahmedabad",
+   "country": "IN",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Sydney",
+   "country": "AU",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Melbourne",
+   "country": "AU",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Brisbane",
+   "country": "AU",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Perth",
+   "country": "AU",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Canberra",
+   "country": "AU",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Auckland",
+   "country": "NZ",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Wellington",
+   "country": "NZ",
+   "region": null,
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Jakarta",
+   "country": "ID",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Kuala Lumpur",
+   "country": "MY",
+   "region": null,
+   "aliases": [
+    "KL"
+   ]
+  },
+  {
+   "name": "Bangkok",
+   "country": "TH",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Ho Chi Minh City",
+   "country": "VN",
+   "region": null,
+   "aliases": [
+    "Saigon",
+    "HCMC"
+   ]
+  },
+  {
+   "name": "Hanoi",
+   "country": "VN",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Manila",
+   "country": "PH",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Karachi",
+   "country": "PK",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Lahore",
+   "country": "PK",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Dhaka",
+   "country": "BD",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Colombo",
+   "country": "LK",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Mexico City",
+   "country": "MX",
+   "region": null,
+   "aliases": [
+    "CDMX",
+    "Ciudad de México",
+    "Ciudad de Mexico"
+   ]
+  },
+  {
+   "name": "Guadalajara",
+   "country": "MX",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Monterrey",
+   "country": "MX",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "São Paulo",
+   "country": "BR",
+   "region": null,
+   "aliases": [
+    "Sao Paulo"
+   ]
+  },
+  {
+   "name": "Rio de Janeiro",
+   "country": "BR",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Buenos Aires",
+   "country": "AR",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Santiago",
+   "country": "CL",
+   "region": null,
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Bogotá",
+   "country": "CO",
+   "region": null,
+   "aliases": [
+    "Bogota"
+   ]
+  },
+  {
+   "name": "Medellín",
+   "country": "CO",
+   "region": null,
+   "aliases": [
+    "Medellin"
+   ]
+  },
+  {
+   "name": "Lima",
+   "country": "PE",
+   "region": null,
+   "aliases": [],
+   "ambiguous": true
+  },
+  {
+   "name": "Montevideo",
+   "country": "UY",
+   "region": null,
+   "aliases": []
+  },
+  {
+   "name": "Panama City",
+   "country": "PA",
+   "region": null,
+   "aliases": [],
+   "ambiguous": true
+  }
+ ],
+ "metros": {
+  "Bay Area": [
+   "San Francisco",
+   "San Jose",
+   "Oakland",
+   "Palo Alto",
+   "Mountain View",
+   "Sunnyvale",
+   "Menlo Park",
+   "Redwood City",
+   "South San Francisco",
+   "Santa Clara",
+   "Cupertino",
+   "Fremont",
+   "San Mateo",
+   "Emeryville",
+   "Berkeley",
+   "Los Gatos",
+   "Foster City",
+   "Burlingame"
+  ],
+  "SF Bay Area": [
+   "San Francisco",
+   "San Jose",
+   "Oakland",
+   "Palo Alto",
+   "Mountain View",
+   "Sunnyvale",
+   "Menlo Park",
+   "Redwood City",
+   "South San Francisco",
+   "Santa Clara",
+   "Cupertino",
+   "Fremont",
+   "San Mateo",
+   "Emeryville",
+   "Berkeley",
+   "Los Gatos",
+   "Foster City",
+   "Burlingame"
+  ],
+  "San Francisco Bay Area": [
+   "San Francisco",
+   "San Jose",
+   "Oakland",
+   "Palo Alto",
+   "Mountain View",
+   "Sunnyvale",
+   "Menlo Park",
+   "Redwood City",
+   "South San Francisco",
+   "Santa Clara",
+   "Cupertino",
+   "Fremont",
+   "San Mateo",
+   "Emeryville",
+   "Berkeley",
+   "Los Gatos",
+   "Foster City",
+   "Burlingame"
+  ],
+  "Silicon Valley": [
+   "San Francisco",
+   "San Jose",
+   "Oakland",
+   "Palo Alto",
+   "Mountain View",
+   "Sunnyvale",
+   "Menlo Park",
+   "Redwood City",
+   "South San Francisco",
+   "Santa Clara",
+   "Cupertino",
+   "Fremont",
+   "San Mateo",
+   "Emeryville",
+   "Berkeley",
+   "Los Gatos",
+   "Foster City",
+   "Burlingame"
+  ]
+ }
+}

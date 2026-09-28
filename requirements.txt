@@ -1,3 +1,5 @@
 botasaurus==4.0.97
 beautifulsoup4
 lxml
+platformdirs
+pywebview

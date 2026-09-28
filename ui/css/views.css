@@ -1,0 +1,27 @@
+/* Secondary views: history, output, settings, system. */
+
+.panel { background: var(--bg-raise); border-radius: var(--radius-lg); padding: var(--sp-5) var(--sp-6); max-width: 720px; }
+.panel + .panel { margin-top: var(--sp-4); }
+.panel-title { margin-bottom: var(--sp-3); }
+.setting { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-6); padding: var(--sp-3) 0; min-height: 56px; }
+.setting-text { min-width: 0; }
+.setting-name { color: var(--text-bright); font-size: var(--fs-md); }
+.setting-help { margin-top: 2px; color: var(--text-muted); font-family: var(--font-mono); font-size: var(--fs-xs); }
+.setting-help.path { word-break: break-all; }
+.toolbar { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-5); flex-wrap: wrap; }
+.plain-table { width: 100%; table-layout: fixed; text-align: left; }
+.plain-table th { background: var(--secondary); color: var(--text-bright); font-family: var(--font-mono); font-size: var(--fs-xs); font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; padding: 0 var(--sp-4); height: 36px; position: sticky; top: 0; }
+.plain-table td { padding: 0 var(--sp-4); height: 40px; font-size: var(--fs-sm); color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plain-table td.right, .plain-table th.right { text-align: right; }
+.plain-table tbody tr:nth-child(odd) td { background: var(--zebra); }
+.plain-table tbody tr:hover td { background: var(--secondary); }
+.row-link { color: var(--accent-text); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-4); margin-bottom: var(--sp-4); }
+.stat { display: flex; flex-direction: column; gap: 2px; }
+.stat-value { font-family: var(--font-mono); font-size: var(--fs-lg); color: var(--text-bright); }
+.status-line { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-md); }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-dim); flex-shrink: 0; }
+.status-dot.ok { background: var(--green); }
+.status-dot.warn { background: var(--warn); }
+.status-dot.bad { background: var(--red); }
+.hint { color: var(--text-muted); font-size: var(--fs-sm); margin-top: var(--sp-2); }

@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="knowitall-token" content="test-token">
+    <title>KnowItAll UI tests</title>
+    <link rel="stylesheet" href="/ui/css/fonts.css"><link rel="stylesheet" href="/ui/css/tokens.css"><link rel="stylesheet" href="/ui/css/base.css">
+    <style>body { overflow: auto; padding: 24px; font-family: var(--font-mono); font-size: 13px; }
+           .pass { color: var(--green); } .fail { color: var(--red); } pre { white-space: pre-wrap; }</style>
+</head>
+<body>
+    <h1>KnowItAll UI tests</h1>
+    <p>Open this page in a browser while the app is running (<code>/ui/tests/run.html</code>). The tab title shows the result.</p>
+    <!-- The modules expect these elements to exist, like the real page. -->
+    <div hidden><span id="activityLatest"></span><div id="activityBody"></div><div id="toasts"></div><div id="announcer"></div></div>
+    <pre id="report">running…</pre>
+    <script type="module" src="/ui/tests/harness.js"></script>
+</body>
+</html>

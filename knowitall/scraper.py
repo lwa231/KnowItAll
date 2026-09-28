@@ -1,46 +1,41 @@
 """The KnowItAll pipeline: company web address -> job listings."""
-import csv
 import re
 from collections import Counter
 from urllib.parse import urlparse
-
-from botasaurus import bt
-from botasaurus.task import task
 
 from . import generic
 from .ats import GUESSABLE, MODULES
 from .ats_detect import Detection, detect, names_match
 from .discovery import discover, parse_site, same_site, unreachable
-from .fetch import fetch_pages, log, page_ok, render_page, settings, should_stop, soup_of, visible_text_length
-from .normalize import FIELDS, dedupe
+from .fetch import fetch_pages, needs_browser, page_ok, render_page
+from .normalize import url_key
 
-SPA_SHELL_RE = re.compile(r'<div id="(root|app|__next)"[^>]*>\s*</div>', re.I)
-BLOCKED_STATUS = {403, 429, 503}
 STREAM_BATCH = 25   # rows handed to the UI at a time
 
 
-def _try_detections(detections, site, limit=3):
+def _try_detections(ctx, detections, site, limit=3):
     for detection in detections[:limit]:
-        jobs = MODULES[detection.ats].fetch_jobs(detection, site)
+        jobs = MODULES[detection.ats].fetch_jobs(ctx, detection, site)
         if jobs is not None:
             return detection, jobs
-        log(f"{detection.ats} board '{detection.token}' returned no data; trying the next option")
+        ctx.log(f"{detection.ats} board '{detection.token}' returned no data; trying the next option")
     return None, None
 
 
-def _guess_boards(site):
+def _guess_boards(ctx, site):
     """Try {slug} on ATSs that 404 cleanly for unknown boards, and verify the board is this company's."""
+    probe = ctx.with_on_jobs(None)          # a guess may be rejected below, so it must not stream rows out
     for ats in GUESSABLE:
         detection = Detection(ats, site.slug, guessed=True)
-        jobs = MODULES[ats].fetch_jobs(detection, site)
+        jobs = MODULES[ats].fetch_jobs(probe, detection, site)
         if jobs is None:
             continue
-        name = MODULES[ats].board_name(detection)
+        name = MODULES[ats].board_name(ctx, detection)
         on_company_site = any(same_site(urlparse(job["url"]).hostname, site.domain) for job in jobs)
         if names_match(name, site.slug) or on_company_site:
-            log(f"{ats} has a board named '{site.slug}' (titled {name!r}); using it")
+            ctx.log(f"{ats} has a board named '{site.slug}' (titled {name!r}); using it")
             return detection, jobs
-        log(f"ignoring {ats} board '{site.slug}': its title {name!r} doesn't match {site.name}")
+        ctx.log(f"ignoring {ats} board '{site.slug}': its title {name!r} doesn't match {site.name}")
     return None, None
 
 
@@ -54,24 +49,15 @@ def _use_proper_company_name(jobs, result, site):
             job["company"] = proper
 
 
-def _needs_browser(page):
-    if page.get("status") in BLOCKED_STATUS:
-        return True
-    if not page_ok(page):
-        return False
-    few_links = len(soup_of(page).find_all("a", href=True)) < 5
-    return visible_text_length(page) < 2000 or bool(SPA_SHELL_RE.search(page["html"])) or few_links
-
-
-def find_jobs(url, on_jobs=None):
+def find_jobs(ctx, url, on_jobs=None):
     """Scrape one company.
 
     `on_jobs(list_of_jobs)` is called as results become available so a UI can stream them.
-    Cancellation (fetch.settings.cancel_event) is checked between phases; whatever was found
-    up to that point is kept and returned.
+    Cancellation (ctx.cancel) is checked between phases; whatever was found up to that point
+    is kept and returned.
     """
     site = parse_site(url)
-    log(f"===== {site.domain} =====")
+    ctx.log(f"===== {site.domain} =====")
     result = {
         "company": site.name,
         "domain": site.domain,
@@ -81,58 +67,84 @@ def find_jobs(url, on_jobs=None):
         "notes": [],
         "jobs": [],
         "stopped": False,
+        "truncated": None,
     }
 
-    home, candidates = discover(site)
-    if should_stop():
+    # Every reader hands its results to `sink` page by page. It drops duplicates and rows without a
+    # title or link, then passes the rest on immediately, so a slow company fills in as it goes.
+    seen, collected = set(), []
+
+    def sink(batch):
+        fresh = []
+        for job in batch:
+            key = url_key(job.get("url") or "")
+            if not job.get("title") or not job.get("url") or key in seen:
+                continue
+            seen.add(key)
+            fresh.append(job)
+        if not fresh:
+            return
+        _use_proper_company_name(fresh, result, site)
+        collected.extend(fresh)
+        if on_jobs:
+            for start in range(0, len(fresh), STREAM_BATCH):
+                on_jobs(fresh[start:start + STREAM_BATCH])
+
+    ctx = ctx.with_on_jobs(sink)
+
+    home, candidates = discover(ctx, site)
+    if ctx.should_stop():
         result["stopped"] = True
         return result
     if unreachable(home):
-        log(f"{site.host} does not exist (DNS lookup failed); skipping")
+        ctx.log(f"{site.host} does not exist (DNS lookup failed); skipping")
         result["notes"].append("website could not be reached")
         return result
     result["careers_pages"] = [c["final_url"] for c in candidates]
     for candidate in candidates:
-        log(f"careers page candidate: {candidate['final_url']} (score {candidate['score']}: {', '.join(candidate['reasons'][:2])})")
+        ctx.log(f"careers page candidate: {candidate['final_url']} (score {candidate['score']}: {', '.join(candidate['reasons'][:2])})")
 
     # 1. A supported ATS referenced from the homepage / careers pages
     detections, unsupported, _ = detect([home] + candidates, site)
-    detection, jobs = _try_detections(detections, site)
+    detection, jobs = _try_detections(ctx, detections, site)
 
     # 2. One hop into "View all jobs" style links
     listing_pages = list(candidates)
-    if jobs is None and not should_stop():
-        hop = [p for p in fetch_pages(generic.view_all_links(candidates, site)) if page_ok(p)]
+    if jobs is None and not ctx.should_stop():
+        hop = [p for p in fetch_pages(ctx, generic.view_all_links(candidates, site)) if page_ok(p)]
         if hop:
-            log(f"followed {len(hop)} 'view all jobs' link(s)")
+            ctx.log(f"followed {len(hop)} 'view all jobs' link(s)")
             listing_pages += hop
             hop_detections, hop_unsupported, _ = detect(hop, site)
             unsupported |= hop_unsupported
-            detection, jobs = _try_detections(hop_detections, site)
+            detection, jobs = _try_detections(ctx, hop_detections, site)
 
     # 3. Guess the board by company name (e.g. stripe.com -> Greenhouse board 'stripe')
-    if jobs is None and not should_stop():
-        detection, jobs = _guess_boards(site)
+    if jobs is None and not ctx.should_stop():
+        detection, jobs = _guess_boards(ctx, site)
 
     # 4. Generic HTML extraction (JSON-LD + job-looking links), then Chrome for JavaScript-rendered pages
-    if jobs is None and not should_stop():
+    if jobs is None and not ctx.should_stop():
         if unsupported:
             note = f"detected {', '.join(sorted(unsupported))} (not supported yet), using generic extraction"
-            log(note)
+            ctx.log(note)
             result["notes"].append(note)
-        jobs = generic.extract_jobs(listing_pages, site)
-        if not jobs and settings.use_browser and listing_pages:
-            targets = [p for p in listing_pages if _needs_browser(p)] or listing_pages[:1]
-            log(f"no jobs in the plain HTML; rendering {targets[0]['final_url']} in Chrome")
-            rendered = [p for p in (render_page(t["final_url"]) for t in targets[:2]) if page_ok(p)]
+        jobs = generic.extract_jobs(ctx, listing_pages, site)
+        if not jobs and ctx.config.use_browser and listing_pages:
+            targets = [p for p in listing_pages if needs_browser(p, thorough=True)] or listing_pages[:1]
+            ctx.log(f"no jobs in the plain HTML; rendering {targets[0]['final_url']} in Chrome")
+            rendered = [p for p in (render_page(ctx, t["final_url"]) for t in targets[:2]) if page_ok(p)]
             rendered_detections, _, _ = detect(rendered, site)
-            detection, ats_jobs = _try_detections(rendered_detections, site)
-            jobs = ats_jobs if ats_jobs is not None else generic.extract_jobs(rendered, site)
+            detection, ats_jobs = _try_detections(ctx, rendered_detections, site)
+            jobs = ats_jobs if ats_jobs is not None else generic.extract_jobs(ctx, rendered, site)
 
-    jobs = dedupe(jobs or [])
-    _use_proper_company_name(jobs, result, site)
+    sink(jobs or [])              # whatever a reader returned without streaming; repeats are skipped
+    jobs = collected
     result["jobs"] = jobs
-    result["stopped"] = should_stop()
+    result["stopped"] = ctx.should_stop()
+    result["truncated"] = ctx.truncated
+    if ctx.truncated:
+        result["notes"].append(f"partial: {ctx.truncated}")
     if detection:
         result["source"] = detection.ats if not detection.guessed else f"{detection.ats} (by name)"
         result["source_detail"] = detection.describe()
@@ -142,37 +154,5 @@ def find_jobs(url, on_jobs=None):
     if not candidates and not jobs:
         result["notes"].append("no careers page found")
 
-    # Stream results out in batches so the UI fills in rather than appearing all at once.
-    if on_jobs and jobs:
-        for start in range(0, len(jobs), STREAM_BATCH):
-            on_jobs(jobs[start:start + STREAM_BATCH])
-
-    log(f"{site.domain}: {len(jobs)} job(s)")
+    ctx.log(f"{site.domain}: {len(jobs)} job(s)")
     return result
-
-
-def write_csv(jobs, path):
-    # utf-8-sig so Excel on Windows shows accented characters correctly.
-    with open(path, "w", newline="", encoding="utf-8-sig") as file:
-        writer = csv.DictWriter(file, fieldnames=FIELDS, extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(jobs)
-
-
-def write_results(data, results):
-    for result in results if isinstance(results, list) else [results]:
-        if not result:
-            continue
-        name = f"jobs_{result['domain']}"
-        bt.write_json(result["jobs"], name, log=False)
-        write_csv(result["jobs"], f"output/{name}.csv")
-        result["files"] = [f"output/{name}.json", f"output/{name}.csv"]
-
-
-@task(output=write_results, close_on_crash=True, create_error_logs=False, raise_exception=False)
-def scrape_jobs(url):
-    try:
-        return find_jobs(url)
-    except ValueError as error:  # bad input address
-        log(str(error))
-        return None

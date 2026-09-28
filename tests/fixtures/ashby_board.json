@@ -1,0 +1,33 @@
+{
+ "jobs": [
+  {
+   "title": "Platform Engineer",
+   "jobUrl": "https://jobs.ashbyhq.com/acme/1",
+   "isListed": true,
+   "location": "New York",
+   "secondaryLocations": [
+    {
+     "location": "Toronto"
+    }
+   ],
+   "department": "Engineering",
+   "workplaceType": "Hybrid",
+   "isRemote": true,
+   "publishedAt": "2025-02-10T12:00:00.000+00:00",
+   "employmentType": "FullTime",
+   "address": {
+    "postalAddress": {
+     "addressLocality": "New York",
+     "addressRegion": "New York",
+     "addressCountry": "USA"
+    }
+   }
+  },
+  {
+   "title": "Hidden Role",
+   "jobUrl": "https://jobs.ashbyhq.com/acme/2",
+   "isListed": false,
+   "location": "Paris"
+  }
+ ]
+}

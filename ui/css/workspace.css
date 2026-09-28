@@ -1,0 +1,45 @@
+/* The dock/float pane manager: tab strip, four quadrant tiles, floating windows, drag guides. */
+
+.tab-strip { display: flex; align-items: flex-end; gap: var(--sp-1); padding: var(--sp-2) var(--sp-3) 0; background: var(--bg-base); flex-shrink: 0; overflow-x: auto; user-select: none; }
+.tab { display: flex; align-items: center; border-radius: var(--radius) var(--radius) 0 0; color: var(--text-muted); white-space: nowrap; transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
+.tab:hover { background: var(--bg-raise); color: var(--text-bright); }
+.tab[data-active="true"] { background: var(--secondary); color: var(--accent-text); }
+.tab-main { display: flex; align-items: center; gap: var(--sp-2); min-height: 36px; padding: 0 var(--sp-3); font-family: var(--font-mono); font-size: var(--fs-xs); cursor: grab; border-radius: var(--radius) 0 0 0; }
+.tab-main:active { cursor: grabbing; }
+.tab-label { text-transform: uppercase; letter-spacing: var(--tracking-label); }
+.tab-main:not([data-tab="ALL"]) .tab-label { text-transform: none; letter-spacing: 0; }
+.tab-count { color: var(--text-dim); }
+.tab[data-active="true"] .tab-count { color: var(--text-muted); }
+.tab-close { width: 28px; height: 28px; margin-right: 2px; opacity: 0.55; }
+.tab:hover .tab-close, .tab:focus-within .tab-close, .tab[data-active="true"] .tab-close { opacity: 1; }
+.tab-note { padding: 0 var(--sp-3); font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-dim); align-self: center; }
+
+.workspace { position: relative; flex: 1; min-height: 0; }
+.dock { position: absolute; inset: 0; }
+.tile { position: absolute; padding: 3px; transition: left 0.12s var(--ease), top 0.12s var(--ease), width 0.12s var(--ease), height 0.12s var(--ease); }
+.pane { height: 100%; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; background: var(--bg-base); border-radius: var(--radius); }
+.pane-head { display: flex; align-items: center; gap: var(--sp-2); padding: 0 var(--sp-2) 0 var(--sp-3); min-height: 36px; background: var(--bg-raise); flex-shrink: 0; cursor: grab; user-select: none; font-family: var(--font-mono); font-size: var(--fs-xs); }
+.pane-head:active { cursor: grabbing; }
+.pane-title { color: var(--accent-text); font-weight: 500; letter-spacing: 0.04em; }
+.pane-stat { color: var(--text-muted); white-space: nowrap; }
+.pane-spacer { flex: 1; }
+.pane-body { flex: 1; overflow: auto; min-height: 0; position: relative; }
+.run-banner { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-1) var(--sp-3); background: var(--warn-fill); color: var(--warn); font-size: var(--fs-xs); font-family: var(--font-mono); flex-shrink: 0; }
+.run-banner .btn { min-height: 24px; padding: 0 var(--sp-2); }
+
+.quad-guides { position: absolute; inset: 0; pointer-events: none; display: none; z-index: var(--z-guides); }
+.quad-guides.on { display: block; }
+.quad-guides i { position: absolute; display: block; border-radius: var(--radius); box-shadow: inset 0 0 0 1px var(--secondary-hi); }
+
+.float-layer { position: absolute; inset: 0; pointer-events: none; }
+.float { position: absolute; pointer-events: auto; display: flex; flex-direction: column; background: var(--bg-base); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-float); }
+.float.folded { height: auto !important; }
+.float.folded .pane-body, .float.folded .run-banner { display: none; }
+.resize-h { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; opacity: 0.6;
+    background: linear-gradient(135deg, transparent 50%, var(--text-dim) 50%, var(--text-dim) 60%, transparent 60%); }
+.resize-h:hover { opacity: 1; }
+.resize-e { position: absolute; right: 0; top: 0; bottom: 16px; width: 6px; cursor: ew-resize; }
+.resize-s { position: absolute; left: 0; right: 16px; bottom: 0; height: 6px; cursor: ns-resize; }
+
+.drop-hint { position: absolute; pointer-events: none; display: none; z-index: var(--z-drop); background: var(--glow); border-radius: var(--radius); box-shadow: inset 0 0 0 2px var(--accent-text); transition: left 0.08s, top 0.08s, width 0.08s, height 0.08s; }
+.drag-ghost { position: fixed; z-index: var(--z-drag); pointer-events: none; background: var(--secondary); color: var(--accent-text); padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); font-family: var(--font-mono); font-size: var(--fs-xs); box-shadow: var(--shadow-pop); }

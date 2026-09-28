@@ -1,0 +1,42 @@
+{
+ "totalFound": 2,
+ "content": [
+  {
+   "id": "700",
+   "name": "Recruiter",
+   "company": {
+    "name": "Acme"
+   },
+   "location": {
+    "city": "Dublin",
+    "country": "ie",
+    "fullLocation": "Dublin, Ireland",
+    "remote": false,
+    "region": "Leinster"
+   },
+   "department": {
+    "label": "People"
+   },
+   "releasedDate": "2025-01-15T08:00:00.000Z",
+   "typeOfEmployment": {
+    "id": "permanent",
+    "label": "Full-time"
+   }
+  },
+  {
+   "id": "701",
+   "name": "Remote Writer",
+   "location": {
+    "city": "Anywhere",
+    "country": "us",
+    "remote": true,
+    "hybrid": false
+   },
+   "releasedDate": "2025-01-16T08:00:00.000Z",
+   "typeOfEmployment": {
+    "id": "contract",
+    "label": "Contract"
+   }
+  }
+ ]
+}

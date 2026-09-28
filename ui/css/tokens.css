@@ -1,0 +1,103 @@
+/* =====================================================================
+   DESIGN TOKENS - the only place colours, type sizes, spacing and timings are defined.
+   Every other stylesheet uses var(--...); to restyle the app, change things here.
+
+   Look: OLED-dark terminal (Fira Code labels, Inter body), separated by colour steps instead of borders.
+   Contrast: every text token meets WCAG AA (4.5:1) on the surfaces it is used on, in both themes;
+   tests/test_ui_contrast.py checks this from this very file.
+   ===================================================================== */
+
+:root, [data-theme="dark"] {
+    color-scheme: dark;
+    /* surfaces, darkest to lightest */
+    --chrome:        #000000;      /* sidebar, header, status strips */
+    --bg-base:       #0b0b0c;      /* working surface */
+    --bg-raise:      #111113;      /* pane heads, panels, popovers */
+    --secondary:     #21252b;      /* inputs, buttons, table heads */
+    --secondary-hi:  #2b3038;      /* hover on secondary */
+    --zebra:         rgba(255, 255, 255, 0.02);
+
+    /* text */
+    --text-bright:   #d7dae0;
+    --text-main:     #abb2bf;
+    --text-muted:    #a4abb6;
+    --text-dim:      #9299a4;      /* smallest-hierarchy labels; still >= 4.5:1 on every surface */
+
+    /* accent + states */
+    --accent:        #35365e;      /* fills */
+    --accent-hover:  #414273;
+    --accent-text:   #9899c8;      /* text and glyphs on dark surfaces */
+    --on-accent:     #eceef3;      /* text on an accent fill */
+    --green:         #98c379;
+    --warn:          #e5c07b;
+    --red:           #e8808a;
+    --red-fill:      rgba(224, 108, 117, 0.16);
+    --warn-fill:     rgba(229, 192, 123, 0.14);
+    --glow:          rgba(53, 54, 94, 0.55);
+    --focus:         #9899c8;      /* keyboard focus ring: >= 3:1 against every surface */
+    --shadow-float:  0 14px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.05);
+    --shadow-pop:    0 10px 30px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="light"] {
+    color-scheme: light;
+    --chrome:        #ffffff;
+    --bg-base:       #f7f7f8;
+    --bg-raise:      #f0f0f2;
+    --secondary:     #e3e5ea;
+    --secondary-hi:  #d5d8df;
+    --zebra:         rgba(0, 0, 0, 0.018);
+
+    --text-bright:   #16181c;
+    --text-main:     #343841;
+    --text-muted:    #4f5661;
+    --text-dim:      #585f6a;
+
+    --accent:        #35365e;
+    --accent-hover:  #2a2b4d;
+    --accent-text:   #35365e;
+    --on-accent:     #ffffff;
+    --green:         #2f6a1a;
+    --warn:          #7a5405;
+    --red:           #a82d25;
+    --red-fill:      rgba(179, 50, 42, 0.12);
+    --warn-fill:     rgba(122, 84, 5, 0.12);
+    --glow:          rgba(53, 54, 94, 0.22);
+    --focus:         #35365e;
+    --shadow-float:  0 14px 40px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.07);
+    --shadow-pop:    0 10px 30px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+:root {
+    /* type: nothing below 12px */
+    --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --fs-xs:  0.75rem;     /* 12px  labels, counts */
+    --fs-sm:  0.8125rem;   /* 13px  table cells, controls */
+    --fs-md:  0.875rem;    /* 14px  body */
+    --fs-lg:  1rem;        /* 16px */
+    --fs-xl:  1.25rem;     /* 20px  brand */
+    --tracking-label: 0.08em;
+
+    /* spacing (4px grid) */
+    --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px;  --sp-4: 16px;  --sp-5: 20px;  --sp-6: 24px;  --sp-8: 32px;
+
+    --radius: 4px;
+    --radius-lg: 6px;
+    --hit: 32px;           /* minimum height of a clickable control in this dense tool (44px is used for the main actions) */
+
+    /* motion: short, and switched off for people who ask for less */
+    --t-fast: 120ms;
+    --t-base: 180ms;
+    --ease: cubic-bezier(0.2, 0, 0, 1);
+
+    /* layout */
+    --sidebar-w: 248px;
+    --header-top-h: 132px;
+    --z-sticky: 10;
+    --z-guides: 55;
+    --z-drop: 60;
+    --z-popover: 200;
+    --z-toast: 300;
+    --z-drag: 999;
+}

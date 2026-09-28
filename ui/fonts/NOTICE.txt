@@ -1,0 +1,7 @@
+Fonts bundled with KnowItAll so the interface renders identically offline.
+
+  Inter      (c) The Inter Project Authors          https://github.com/rsms/inter
+  Fira Code  (c) The Fira Code Project Authors      https://github.com/tonsky/FiraCode
+
+Both are licensed under the SIL Open Font License, Version 1.1 (https://openfontlicense.org).
+The files were obtained from Google Fonts (variable .woff2, latin and latin-extended subsets).

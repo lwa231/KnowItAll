@@ -1,0 +1,36 @@
+{
+ "jobs": [
+  {
+   "id": 101,
+   "title": "Backend Engineer",
+   "company_name": "Acme Corp",
+   "absolute_url": "https://boards.greenhouse.io/acme/jobs/101",
+   "location": {
+    "name": "San Francisco, CA"
+   },
+   "first_published": "2025-03-01T10:00:00-05:00",
+   "updated_at": "2025-03-05T10:00:00-05:00",
+   "metadata": [
+    {
+     "name": "Workplace Type",
+     "value": "Hybrid"
+    },
+    {
+     "name": "Employment Type",
+     "value": "Full-time"
+    }
+   ]
+  },
+  {
+   "id": 102,
+   "title": "Designer",
+   "company_name": "Acme Corp",
+   "absolute_url": "https://boards.greenhouse.io/acme/jobs/102",
+   "location": {
+    "name": "Remote - US"
+   },
+   "updated_at": "2025-03-02T00:00:00Z",
+   "metadata": null
+  }
+ ]
+}

@@ -1,0 +1,65 @@
+/* Reset, typography, focus, utilities. Nothing component-specific lives here. */
+
+*, *::before, *::after { box-sizing: border-box; }
+* { border: 0; }                      /* the design separates by colour step, not lines (outlines are for focus only) */
+
+html { -webkit-text-size-adjust: 100%; }
+body {
+    margin: 0; padding: 0; overflow: hidden;
+    background: var(--bg-base); color: var(--text-main);
+    font-family: var(--font-body); font-size: var(--fs-md); line-height: 1.5;
+    transition: background-color var(--t-base) var(--ease), color var(--t-base) var(--ease);
+}
+h1, h2, h3, p { margin: 0; }
+ul { margin: 0; padding: 0; list-style: none; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; padding: 0; text-align: inherit; }
+button:disabled, input:disabled { cursor: not-allowed; opacity: 0.55; }
+a { color: inherit; }
+table { border-collapse: collapse; }
+
+.mono { font-family: var(--font-mono); }
+.label {
+    font-family: var(--font-mono); font-size: var(--fs-xs); text-transform: uppercase;
+    letter-spacing: var(--tracking-label); color: var(--text-dim);
+}
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dim { color: var(--text-dim); }
+.muted { color: var(--text-muted); }
+.bright { color: var(--text-bright); }
+.accent { color: var(--accent-text); }
+.good { color: var(--green); }
+.bad { color: var(--red); }
+.caution { color: var(--warn); }
+[hidden] { display: none !important; }
+
+.sr-only {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap;
+}
+
+/* Keyboard focus is always visible (WCAG 2.4.7) and never hidden behind sticky bars. */
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: var(--radius); }
+.pane-body:focus-visible { outline-offset: -2px; }
+html { scroll-padding-top: var(--sp-8); }
+
+.skip-link {
+    position: fixed; top: var(--sp-2); left: var(--sp-2); z-index: var(--z-toast);
+    padding: var(--sp-2) var(--sp-4); border-radius: var(--radius);
+    background: var(--accent); color: var(--on-accent); transform: translateY(-200%);
+}
+.skip-link:focus { transform: translateY(0); }
+
+::selection { background: var(--glow); color: var(--text-bright); }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--secondary); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--secondary-hi); }
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important; scroll-behavior: auto !important;
+    }
+}
