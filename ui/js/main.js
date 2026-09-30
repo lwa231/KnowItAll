@@ -2,7 +2,7 @@
 import * as api from './api.js';
 import { state, on } from './state.js';
 import { loadSettings, syncBindings } from './settings.js';
-import { logLine } from './notify.js';
+import { logLine, announce } from './notify.js';
 import { initFilterBar, refreshFacets, refreshFacetsLive } from './filterbar.js';
 import { initWorkspace, onServerState, refreshVisible } from './workspace.js';
 import { initQueue, renderQueue } from './queue.js';
@@ -27,6 +27,14 @@ function showView(name) {
     if (name === 'system') startSystemPolling();
 }
 
+/** A company that has just finished with nothing to show says why, once, to screen readers (the log and panes show it too). */
+function announceOutcomes(previous) {
+    const before = new Map(previous.map(c => [c.domain, c.outcome]));
+    const news = state.companies.filter(c => c.outcome && c.outcome !== 'found' && before.get(c.domain) !== c.outcome && c.outcome_detail);
+    if (news.length) announce(news.map(c => `${c.domain}: ${c.outcome_detail}`).join(' '));
+    news.forEach(c => logLine(`${c.domain}: ${c.outcome_detail}`));
+}
+
 function handleState(incoming) {
     const previous = state.companies;
     const wasRunning = state.running;
@@ -43,6 +51,7 @@ function handleState(incoming) {
     onServerState(incoming, previous);
     renderQueue(); paintRunState(); paintMetrics(); renderNotices();
     announceRunChange(wasRunning);
+    announceOutcomes(previous);
     if (jobsChanged) refreshFacetsLive();
     if (wasRunning && !state.running) {                                  // a scan just ended: settle every count
         refreshFacets();

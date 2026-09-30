@@ -1,8 +1,9 @@
 // Turns a PaneData into HTML: the postings table, its loading skeleton, and the empty/error states.
-import { state } from './state.js';
+import { state, byDomain } from './state.js';
 import { filters, isFiltering } from './filters.js';
 import { SERVER_SORT } from './jobs.js';
-import { esc, relTime, fmtNum } from './util.js';
+import { companyEmptyHTML, noListingsHTML } from './outcomes.js';
+import { esc, relTime, fmtNum, safeHref } from './util.js';
 
 const WORK = { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' };
 const TYPE = { full_time: 'Full-time', part_time: 'Part-time', contract: 'Contract', intern: 'Intern', other: 'Other' };
@@ -32,8 +33,9 @@ function whenCell(job) {
 
 export function rowHTML(job, key) {
     const gone = job.status && job.status !== 'open';
-    const title = job.url
-        ? `<a class="job-title" href="${esc(job.url)}" target="_blank" rel="noopener noreferrer">${esc(job.title)}</a>`
+    const href = safeHref(job.url);                               // only http(s): a scraped "javascript:" address is never a link
+    const title = href
+        ? `<a class="job-title" href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(job.title)}</a>`
         : `<span class="job-title">${esc(job.title)}</span>`;
     const cells = columnsFor(key).map(c => {
         switch (c.key) {
@@ -84,13 +86,20 @@ export function footerHTML(pane) {
     return `<div class="load-row" data-sentinel="${esc(pane.key)}">${inner}</div>`;
 }
 
+/** Does this pane have any postings at all (before filters)? Decides between "your filters hide them" and "there are none". */
+function foundAnything(pane) {
+    if (pane.key === 'ALL') return state.companies.some(c => c.jobs_count > 0);
+    const company = byDomain(pane.key);
+    return !company || state.runView[pane.key] ? true : company.jobs_count > 0;
+}
+
 function emptyHTML(pane) {
     const status = filters.status;
     if (pane.error) {
         return `<div class="empty" role="alert"><div class="headline">Could not load postings</div><p>${esc(pane.error)}</p>
                 <button type="button" class="btn" data-retry="${esc(pane.key)}">Try again</button></div>`;
     }
-    if (isFiltering()) {
+    if (isFiltering() && foundAnything(pane)) {
         return `<div class="empty"><div class="headline">No postings match these filters</div>
                 <p>Try removing a filter or shortening the search. Words are prefixes, so "eng" finds "engineer".</p>
                 <button type="button" class="btn" data-clear-filters>Clear filters</button></div>`;
@@ -103,11 +112,25 @@ function emptyHTML(pane) {
                     : 'A posting is marked closed when two complete scans in a row no longer list it.'}
                    Scan the company again later to find out.</p></div>`;
     }
-    if (pane.key === 'ALL' && !state.companies.length) {
+    if (pane.key === 'ALL') return allEmptyHTML();
+    if (state.runView[pane.key]) {                                // an older scan: the latest scan's outcome does not describe it
+        return `<div class="empty"><div class="headline">That scan found no postings</div><p>Choose the latest scan to see how the most recent one ended.</p></div>`;
+    }
+    const company = byDomain(pane.key);
+    if (!company) return `<div class="empty"><div class="headline">No postings yet</div><p>This company's scan found no postings.</p></div>`;
+    return companyEmptyHTML(company);                             // decided by THIS company's state, never by whether some other company is running
+}
+
+function allEmptyHTML() {
+    if (!state.companies.length) {
         return `<div class="empty"><div class="headline">Nothing scanned yet</div><p>Enter a company web address above and press Start.</p></div>`;
     }
-    if (state.running) return `<div class="empty"><div class="headline">Scanning…</div><p>Postings appear here as they are found.</p></div>`;
-    return `<div class="empty"><div class="headline">No postings yet</div><p>This company's scan found no postings.</p></div>`;
+    const working = state.companies.filter(c => c.state === 'scanning' || c.state === 'queued').length;
+    const headline = working ? 'Scanning…' : 'No postings found';
+    const text = working ? 'Postings appear here as they are found.'
+        : state.companies.length === 1 ? 'The company you scanned returned no postings.' : `None of the ${state.companies.length} companies returned postings.`;
+    const list = noListingsHTML();
+    return `<div class="empty${list ? ' empty-auto' : ''}"><div class="headline">${headline}</div><p>${text}</p></div>${list}`;
 }
 
 /** The whole body of a pane: table, skeleton, or an empty/error message. */
@@ -115,5 +138,6 @@ export function bodyHTML(pane) {
     if (!pane.loadedOnce && pane.loading) return skeletonHTML(pane.key);
     if (pane.error && !pane.rows.length) return emptyHTML(pane);
     if (!pane.rows.length) return pane.loadedOnce ? emptyHTML(pane) : skeletonHTML(pane.key);
-    return `<table class="data-table">${headHTML(pane)}<tbody>${pane.rows.map(job => rowHTML(job, pane.key)).join('')}</tbody></table>${footerHTML(pane)}`;
+    const table = `<table class="data-table">${headHTML(pane)}<tbody>${pane.rows.map(job => rowHTML(job, pane.key)).join('')}</tbody></table>${footerHTML(pane)}`;
+    return pane.key === 'ALL' ? table + noListingsHTML() : table;
 }

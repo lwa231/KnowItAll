@@ -13,6 +13,7 @@
     <p>Open this page in a browser while the app is running (<code>/ui/tests/run.html</code>). The tab title shows the result.</p>
     <!-- The modules expect these elements to exist, like the real page. -->
     <div hidden><span id="activityLatest"></span><div id="activityBody"></div><div id="toasts"></div><div id="announcer"></div></div>
+    <div style="position:absolute; left:-9999px; top:0"><ul id="queueList"></ul><span id="queueCount"></span><span id="sessionLine"></span></div>
     <pre id="report">running…</pre>
     <script type="module" src="/ui/tests/harness.js"></script>
 </body>

@@ -20,8 +20,10 @@ DEFAULTS = {
     "fresh": False,             # ignore cached pages by default
     "autosave": True,           # write JSON/CSV files as each company finishes
     "browser_workers": 1,       # scraping Chrome windows that may render at once (1-3)
+    "time_limit_min": 3,        # minutes one company may take before its scan is cut off (1, 3 or 5)
 }
 INT_LIMITS = {"max_jobs": (1, 100_000), "max_enrich": (0, 500), "concurrency": (1, 4), "browser_workers": (1, 3)}
+CHOICES = {"time_limit_min": (1, 3, 5)}
 BOOLEANS = ("fresh", "autosave")
 THEMES = ("dark", "light")
 
@@ -37,6 +39,10 @@ def clean(values):
         if isinstance(value, bool) or not isinstance(value, (int, float)) or value != int(value):
             continue
         result[key] = max(low, min(high, int(value)))
+    for key, allowed in CHOICES.items():
+        value = values.get(key)
+        if isinstance(value, int) and not isinstance(value, bool) and value in allowed:
+            result[key] = value
     for key in BOOLEANS:
         if isinstance(values.get(key), bool):
             result[key] = values[key]
@@ -57,6 +63,11 @@ def validate(update):
                 accepted[key] = value
             else:
                 problems.append(f"theme must be one of {', '.join(THEMES)}")
+        elif key in CHOICES:
+            if isinstance(value, int) and not isinstance(value, bool) and value in CHOICES[key]:
+                accepted[key] = value
+            else:
+                problems.append(f"{key} must be one of {', '.join(str(v) for v in CHOICES[key])}")
         elif key in INT_LIMITS:
             low, high = INT_LIMITS[key]
             if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:

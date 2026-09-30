@@ -30,6 +30,8 @@ def parse_args(argv=None):
     parser.add_argument("--no-history", action="store_true",
                         help="do not record this scan in history.db (so nothing is marked 'new' either)")
     parser.add_argument("--no-export", action="store_true", help="do not write jobs_<domain>.json/.csv files")
+    parser.add_argument("--debug", action="store_true",
+                        help="log what JSON a JavaScript careers page loads (to build a per-site adapter)")
     return parser.parse_args(argv)
 
 
@@ -39,7 +41,11 @@ def print_summary(service, show):
         jobs = service.jobs_of(company["domain"])
         print(f"== {company['company']} ({company['domain']}) ==")
         print(f"   state        : {company['state']}")
-        print(f"   careers page : {company.get('careers_page') or 'not found'}")
+        if company.get("outcome"):
+            print(f"   outcome      : {company['outcome']} - {company.get('outcome_detail')}")
+            if company.get("outcome_hint"):
+                print(f"                  {company['outcome_hint']}")
+        print(f"   careers page : {company.get('careers_url') or company.get('careers_page') or 'not found'}")
         print(f"   source       : {company.get('source_detail') or company.get('source') or '-'}")
         for note in company["notes"]:
             print(f"   note         : {note}")
@@ -70,6 +76,7 @@ def main(argv=None):
 
     compat.check_version(log)
     service = Service()
+    service.runner.debug = args.debug
     pool = None if args.no_browser else BrowserPool(
         size=args.browser_workers or service.get_settings()["browser_workers"], headless=not args.headful)
     service.attach_browser(pool, headless=not args.headful)
