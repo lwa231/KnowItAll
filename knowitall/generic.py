@@ -3,7 +3,7 @@ import json
 import re
 from urllib.parse import parse_qsl, urlencode, urljoin, urlparse
 
-from .discovery import same_site
+from .discovery import on_site
 from .fetch import fetch_pages, page_ok, soup_of
 from .normalize import clean, make_job, url_key
 
@@ -23,6 +23,10 @@ NAV_SEGMENTS = {
     "join-talent-community", "recommended-jobs",
 }
 NAV_PREFIXES = ("life-", "life_", "why-", "working-at", "work-at", "meet-", "our-")
+# Path segments that hold a listing rather than being a posting: /careers/list/135592/ is a posting only because
+# an id follows, /careers/search/ and /careers/list/?location=... are the listing itself.
+LISTING_SEGMENTS = {"search", "list", "listing", "listings"}
+HREF_RE = re.compile(r"""href\s*=\s*["']([^"'#>\s]+)""", re.I)
 VIEW_ALL_RE = re.compile(
     r"view (all )?(jobs|openings|positions|roles)|see (all )?open (roles|positions|jobs)|search (all )?jobs"
     r"|browse (all )?(jobs|roles|openings)|(current|all|open) (openings|positions|roles|jobs)",
@@ -44,6 +48,11 @@ UTILITY_TITLE_RE = re.compile(
     r"|^job (alerts?|search|cart)$|talent (community|network)",
     re.I,
 )
+# Section links that live under /careers/ but are not postings: "Work with us", "Explore opportunities",
+# "Students and graduates". Whole-title matches only, so "Graduate Software Engineer" is untouched.
+NAV_TITLE_RE = re.compile(
+    r"^(explore\b.*|discover\b.*|(work|grow|join|build)\s+(with|at)\s+(us|our\b.*)|students?(\s+(and|&)\s+graduates?)?"
+    r"|graduates?|early\s+careers?|university\s+(programs?|recruiting)|learn\s+(more\s+)?about\b.*)$", re.I)
 LOCATION_RE = re.compile(
     r"\b(remote|hybrid|on-?site)\b|,\s*[A-Z]{2}\b|\b(United States|USA|United Kingdom|UK|Canada|Germany|France"
     r"|India|Australia|Singapore|Ireland|Netherlands|Japan|Brazil|Mexico|Spain|Poland|Israel|Europe|EMEA|APAC)\b"
@@ -112,16 +121,44 @@ def _ld_employment_type(posting):
     return value[0] if isinstance(value, list) and value else value
 
 
-def job_from_ld(posting, page_url, site):
+def _slug(text):
+    return re.sub(r"[^a-z0-9]+", "-", str(text or "").lower()).strip("-")[:80]
+
+
+def _ld_identifier(posting):
+    identifier = posting.get("identifier")
+    if isinstance(identifier, dict):
+        identifier = identifier.get("value") or identifier.get("name")
+    return str(identifier).strip() if identifier not in (None, "") else None
+
+
+def _ld_url(posting, page_url, taken):
+    """The posting's own URL, or - when it has none - the page it sits on plus #job-<id or title>, so several
+    postings embedded in one page stay several postings. `taken` collects the fragments used on this page;
+    None means the page is the posting's own (a job's detail page), so the page URL is right as it is."""
+    url = posting.get("url")
+    if isinstance(url, str) and url.strip():
+        return urljoin(page_url, url.strip())
+    if taken is None:
+        return page_url
+    fragment = _slug(_ld_identifier(posting) or posting.get("title") or posting.get("name")) or "posting"
+    unique, n = fragment, 1
+    while unique in taken:
+        n += 1
+        unique = f"{fragment}-{n}"
+    taken.add(unique)
+    return f"{page_url.split('#')[0]}#job-{unique}"
+
+
+def job_from_ld(posting, page_url, site, taken=None):
     remote = True if str(posting.get("jobLocationType", "")).upper() == "TELECOMMUTE" else None
     address = {k: v if isinstance(v, str) else None for k, v in _ld_address(posting).items()}
     organization = posting.get("hiringOrganization")
     company = organization.get("name") if isinstance(organization, dict) else None
-    url = posting.get("url")
     return make_job(
         company=company or site.name,
         title=posting.get("title") or posting.get("name"),
-        url=urljoin(page_url, url) if isinstance(url, str) else page_url,
+        url=_ld_url(posting, page_url, taken),
         location=_ld_location(posting),
         remote=remote,
         department=posting.get("occupationalCategory") or posting.get("industry"),
@@ -142,15 +179,33 @@ def _title_from_slug(path):
 
 def _is_job_link(url, site, listing_url):
     parts = urlparse(url)
-    if parts.scheme not in ("http", "https") or not same_site(parts.hostname, site.domain):
+    if parts.scheme not in ("http", "https") or not on_site(parts.hostname, site):
         return False
     if url_key(url) == url_key(listing_url) or re.search(r"[?&]page=", url):
         return False
-    match = JOB_PATH_RE.search(parts.path)
-    if match:
+    # Every "/careers/<x>" style step of the path is looked at, not only the first: the first of
+    # /careers/search/job/software-engineer-225712 is /careers/search, which is navigation, but a posting follows.
+    for match in JOB_PATH_RE.finditer(parts.path):
         segment = match.group(2).lower()
-        return segment not in NAV_SEGMENTS and not segment.startswith(NAV_PREFIXES)
+        if segment in LISTING_SEGMENTS:
+            following = parts.path[match.end():].strip("/").split("/")[0]
+            if re.search(r"\d", following):
+                return True                     # /careers/list/135592/
+            continue
+        if segment not in NAV_SEGMENTS and not segment.startswith(NAV_PREFIXES):
+            return True
     return bool(JOB_QUERY_RE.search("?" + parts.query))
+
+
+def count_job_links(html, page_url, site):
+    """How many distinct job-looking links are in this HTML. A regex, not a parse: a rendered listing is asked
+    this every half second while it loads."""
+    found = set()
+    for href in HREF_RE.findall(html or ""):
+        url = urljoin(page_url, href.replace("&amp;", "&"))
+        if _is_job_link(url, site, page_url):
+            found.add(url_key(url))
+    return len(found)
 
 
 def job_links(page, site):
@@ -164,7 +219,7 @@ def job_links(page, site):
         title = chunks[0] if chunks else None
         if not title or title.lower() in GENERIC_LINK_TEXT or not (3 <= len(title) <= 150):
             title = _title_from_slug(urlparse(url).path)
-        if not title or UTILITY_TITLE_RE.search(title):
+        if not title or UTILITY_TITLE_RE.search(title) or NAV_TITLE_RE.match(title):
             continue
         location = next((c for c in chunks[1:] if LOCATION_RE.search(c)), None)
         links.setdefault(url_key(url), {"url": url, "title": title, "location": location})
@@ -224,6 +279,7 @@ def extract_jobs(ctx, pages, site):
     pages = [p for p in pages if page_ok(p)]
     more_pages = []
     capped = []
+    ctx.phase("Reading the careers pages…")
     for page in pages:
         if len(job_links(page, site)) >= 3:
             more_pages += pagination_urls(page, capped)
@@ -234,7 +290,8 @@ def extract_jobs(ctx, pages, site):
         pages += [p for p in fetch_pages(ctx, more_pages) if page_ok(p)]
 
     for page in pages:
-        jobs.extend(job_from_ld(p, page["final_url"], site) for p in job_postings_in(page))
+        taken = set()
+        jobs.extend(job_from_ld(p, page["final_url"], site, taken) for p in job_postings_in(page))
         for link in job_links(page, site):
             candidates.setdefault(url_key(link["url"]), link)
     if jobs:
@@ -251,6 +308,8 @@ def extract_jobs(ctx, pages, site):
     for start in range(0, len(links), ENRICH_BATCH):
         if ctx.should_stop():
             break
+        ctx.phase(f"Reading job pages {min(start, ctx.config.max_enrich)}/{min(len(links), ctx.config.max_enrich)}…"
+                  if ctx.config.max_enrich else f"Reading {len(links)} job links…")
         chunk = links[start:start + ENRICH_BATCH]
         to_open = [link["url"] for index, link in enumerate(chunk, start) if index < ctx.config.max_enrich]
         details = {url_key(p["url"]): p for p in fetch_pages(ctx, to_open) if p}

@@ -98,6 +98,7 @@ def main(argv=None):
 
     service = Service()
     runner = service.runner
+    runner.debug = args.debug                         # --debug also logs the JSON a rendered careers page loads
     httpd, url = server.serve(service)
     log(f"server ready at {url}")
     service.prune_in_background()

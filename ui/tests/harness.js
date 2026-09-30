@@ -1,10 +1,12 @@
 // Tests for the UI's pure logic. No framework: each test is a function that throws on failure.
-import { esc, relTime, fmtBytes, fmtNum, clamp, debounce, throttle, countryName } from '/ui/js/util.js';
+import { esc, relTime, fmtBytes, fmtNum, clamp, debounce, throttle, countryName, safeHref, fmtClock } from '/ui/js/util.js';
 import { filters, toParams, activeCount, isFiltering, setFilters, toggleValue, clearKey, clearFilters, resetForTests } from '/ui/js/filters.js';
 import { PaneData, PAGE, resetPaneDataForTests, paneData } from '/ui/js/jobs.js';
 import { rowHTML, bodyHTML, footerHTML, skeletonHTML } from '/ui/js/table.js';
 import { geometry } from '/ui/js/workspace.js';
 import { state, on, emit } from '/ui/js/state.js';
+import { renderQueue } from '/ui/js/queue.js';
+import { noListingsHTML, withoutDomain, paintPhases, tickClocks } from '/ui/js/outcomes.js';
 
 const tests = [];
 const test = (name, fn) => tests.push([name, fn]);
@@ -100,13 +102,14 @@ test('gone and closed rows show when, not posted', () => {
     ok(gone.includes('3d ago') && gone.includes('class="row gone"'));
 });
 test('bodyHTML: skeleton, empty, table with footer outside it', () => {
-    resetForTests(); resetPaneDataForTests(); state.companies = []; state.running = false;
+    resetForTests(); resetPaneDataForTests(); state.companies = []; state.running = false; state.runView = {};
     const pane = new PaneData('ALL');
     ok(bodyHTML(pane).includes('aria-busy="true"'), 'skeleton before the first load');
     pane.loadedOnce = true;
     ok(bodyHTML(pane).includes('Nothing scanned yet'));
-    state.companies = [{ domain: 'a.com' }]; ok(bodyHTML(pane).includes('No postings yet'));
-    state.running = true; ok(bodyHTML(pane).includes('Scanning'));
+    state.companies = [{ domain: 'a.com', state: 'done', jobs_count: 0 }]; ok(bodyHTML(pane).includes('No postings found'));
+    state.companies = [{ domain: 'a.com', state: 'scanning', jobs_count: 0 }]; state.running = true; ok(bodyHTML(pane).includes('Scanning'));
+    state.companies = [{ domain: 'a.com', state: 'done', jobs_count: 4 }]; state.running = false;
     toggleValue('workplace', 'remote'); ok(bodyHTML(pane).includes('No postings match these filters') && bodyHTML(pane).includes('data-clear-filters'));
     resetForTests(); setFilters({ status: 'missing' }); ok(bodyHTML(pane).includes('Nothing has gone missing yet')); setFilters({ status: 'closed' }); ok(bodyHTML(pane).includes('Nothing has closed yet'));
     resetForTests(); state.running = false; pane.error = 'HTTP 500'; ok(bodyHTML(pane).includes('Could not load postings') && bodyHTML(pane).includes('data-retry')); pane.error = null;
@@ -118,6 +121,147 @@ test('bodyHTML: skeleton, empty, table with footer outside it', () => {
     pane.loadingMore = true; ok(footerHTML(pane).includes('Loading more'));
     state.companies = []; resetPaneDataForTests();
 });
+
+/* ------------------------------------------------------------- scan outcomes (1H) */
+const company = over => ({ domain: 'acme.com', company: 'Acme', state: 'done', jobs_count: 0, new_count: 0, missing_count: 0, closed_count: 0,
+                           outcome: null, outcome_detail: null, outcome_hint: null, outcome_short: null, careers_url: null, careers_note: null, phase: null, started_at: null, ...over });
+const paneFor = key => { resetPaneDataForTests(); const pane = new PaneData(key); pane.loadedOnce = true; return pane; };
+const OUTCOMES = {
+    no_listings:     { outcome_detail: 'No listings available on this page.', outcome_hint: "KnowItAll found acme.com's careers page but couldn't read any job postings from it.", careers_url: 'https://acme.com/careers' },
+    no_careers_page: { outcome_detail: 'No careers page found on acme.com.', outcome_hint: "Try the company's main website or its careers site address." },
+    unreachable:     { outcome_detail: "Couldn't reach acme.com.", outcome_hint: 'Check the address or your internet connection, then scan again.' },
+    blocked:         { outcome_detail: 'acme.com blocked automated access.', outcome_hint: "The site's bot protection stopped the scan.", careers_url: 'https://acme.com/careers' },
+    unsupported:     { outcome_detail: "acme.com uses Taleo, which KnowItAll can't read yet.", careers_url: 'https://acme.taleo.net/jobs' },
+    timed_out:       { outcome_detail: 'Stopped after 3 min — this site is slow. 0 postings found.', state: 'stopped' },
+    stopped:         { outcome_detail: 'Stopped. 0 postings found.', state: 'stopped' },
+    error:           { outcome_detail: 'Something went wrong scanning acme.com.', outcome_hint: 'Details are in the log.', state: 'failed' },
+};
+test('every outcome is explained in the pane of the company that has it', () => {
+    state.runView = {}; state.running = false; resetForTests();
+    for (const [outcome, fields] of Object.entries(OUTCOMES)) {
+        state.companies = [company({ outcome, ...fields })];
+        const html = bodyHTML(paneFor('acme.com'));
+        ok(html.includes(esc(fields.outcome_detail)), `${outcome}: message`);
+        if (fields.outcome_hint) ok(html.includes(esc(fields.outcome_hint)), `${outcome}: hint`);
+        ok(!html.includes('Scanning…'), `${outcome}: never says Scanning`);
+        eq(html.includes('Open careers page'), !!fields.careers_url, `${outcome}: the careers link is offered only when there is one`);
+    }
+    state.companies = [];
+});
+test('the careers link opens in the system browser and only ever points at http(s)', () => {
+    state.runView = {};
+    state.companies = [company({ outcome: 'blocked', ...OUTCOMES.blocked })];
+    const html = bodyHTML(paneFor('acme.com'));
+    ok(html.includes('href="https://acme.com/careers"') && html.includes('target="_blank"') && html.includes('rel="noopener noreferrer"'));
+    for (const bad of ['javascript:fetch(1)', 'data:text/html,<b>', '/careers', 'file:///etc/passwd', ' JaVaScRiPt:alert(1)']) {
+        state.companies = [company({ outcome: 'blocked', ...OUTCOMES.blocked, careers_url: bad })];
+        ok(!bodyHTML(paneFor('acme.com')).includes('Open careers page'), `refused: ${bad}`);
+    }
+    state.companies = [];
+});
+test('company A finished with nothing while company B scans: A shows its outcome, not Scanning', () => {
+    state.runView = {}; state.running = true; resetForTests();
+    state.companies = [company({ domain: 'a.com', outcome: 'blocked', outcome_detail: 'a.com blocked automated access.', careers_url: 'https://a.com/careers' }),
+                       company({ domain: 'b.com', state: 'scanning', phase: 'Reading the Greenhouse job board…', started_at: Date.now() / 1000 - 42 })];
+    const a = bodyHTML(paneFor('a.com')), b = bodyHTML(paneFor('b.com'));
+    ok(a.includes('a.com blocked automated access.') && !a.includes('Scanning…'), a);
+    ok(b.includes('Scanning…') && b.includes('Reading the Greenhouse job board…') && b.includes('data-elapsed'), b);
+    state.running = false; state.companies = [];
+});
+test('a scanning pane shows its phase and elapsed time, and both update in place', () => {
+    state.runView = {}; state.running = true;
+    state.companies = [company({ state: 'scanning', phase: 'Finding the careers page…', started_at: Date.now() / 1000 - 65 })];
+    const host = document.createElement('div'); host.innerHTML = bodyHTML(paneFor('acme.com')); document.body.appendChild(host);
+    ok(host.querySelector('[data-phase]').textContent === 'Finding the careers page…');
+    ok(/^1:0[4-9]$/.test(host.querySelector('[data-elapsed]').textContent), host.querySelector('[data-elapsed]').textContent);
+    const node = host.querySelector('[data-phase]');
+    state.companies[0].phase = 'Reading the Workday job board…'; paintPhases(host); tickClocks(host);
+    ok(host.querySelector('[data-phase]') === node && node.textContent === 'Reading the Workday job board…', 'same node, new text');
+    host.remove(); state.running = false; state.companies = [];
+});
+test('the All pane lists the companies that finished with nothing, below the table', () => {
+    state.runView = {}; state.running = false; resetForTests();
+    state.companies = [company({ domain: 'good.com', jobs_count: 2 }),
+                       company({ domain: 'tesla.com', outcome: 'blocked', outcome_detail: 'tesla.com blocked automated access.', careers_url: 'https://tesla.com/careers' }),
+                       company({ domain: 'acme.com', outcome: 'no_listings', ...OUTCOMES.no_listings })];
+    const pane = paneFor('ALL'); pane.rows = [job()]; pane.total = 1;
+    const html = bodyHTML(pane);
+    ok(html.indexOf('</table>') < html.indexOf('Companies with no listings (2)'), 'the list follows the table');
+    ok(html.includes('Blocked automated access.') && html.includes('data-open-company="tesla.com"') && html.includes('Open careers page'));
+    ok(!html.includes('data-open-company="good.com"'), 'a company with postings is not listed');
+    const onlyEmpty = paneFor('ALL'); state.companies = state.companies.filter(c => c.jobs_count === 0);
+    const empty = bodyHTML(onlyEmpty);
+    ok(empty.includes('None of the 2 companies returned postings.') && empty.includes('Companies with no listings (2)'), empty);
+    state.companies = []; eq(noListingsHTML(), '');
+});
+test('withoutDomain drops the leading domain so the list does not say it twice', () => {
+    eq(withoutDomain('tesla.com blocked automated access.', 'tesla.com'), 'Blocked automated access.');
+    eq(withoutDomain("Couldn't reach tesla.com.", 'tesla.com'), "Couldn't reach tesla.com.");
+    eq(withoutDomain('No listings available on this page.', 'acme.com'), 'No listings available on this page.');
+});
+test('looking at an older scan never shows the latest scan\'s outcome', () => {
+    state.running = false; state.runView = { 'acme.com': 12 };
+    state.companies = [company({ outcome: 'blocked', ...OUTCOMES.blocked })];
+    const html = bodyHTML(paneFor('acme.com'));
+    ok(html.includes('That scan found no postings') && !html.includes('blocked automated access'), html);
+    state.runView = {}; state.companies = [];
+});
+test('filters hide postings only when there are some; with none found the outcome is shown', () => {
+    state.runView = {}; state.running = false; resetForTests(); toggleValue('workplace', 'remote');
+    state.companies = [company({ outcome: 'no_careers_page', ...OUTCOMES.no_careers_page })];
+    ok(bodyHTML(paneFor('acme.com')).includes('No careers page found on acme.com.'), 'nothing was found, so nothing is being hidden');
+    state.companies = [company({ state: 'done', jobs_count: 9 })];
+    ok(bodyHTML(paneFor('acme.com')).includes('No postings match these filters'));
+    resetForTests(); state.companies = [];
+});
+test('safeHref accepts absolute http(s) URLs only', () => {
+    eq(safeHref('https://x.com/a?b=1'), 'https://x.com/a?b=1'); eq(safeHref('http://x.com'), 'http://x.com/');
+    for (const bad of ['javascript:alert(1)', 'JAVASCRIPT:alert(1)', '\tjavascript:alert(1)', 'data:text/html,x', 'file:///x', '//evil.com', '/relative', 'x.com/a', '', null, undefined]) eq(safeHref(bad), '', `refused ${bad}`);
+});
+test('rowHTML renders a scraped javascript: address as plain text, not a link', () => {
+    const html = rowHTML(job({ url: "javascript:fetch('/api/quit')" }), 'ALL');
+    ok(!html.includes('href=') && html.includes('<span class="job-title">'), html);
+});
+test('fmtClock', () => { eq(fmtClock(0), '0:00'); eq(fmtClock(65.9), '1:05'); eq(fmtClock(3600), '60:00'); eq(fmtClock(-5), '0:00'); eq(fmtClock('x'), '0:00'); });
+
+/* ------------------------------------------------------------- the sidebar queue is updated in place */
+test('queue rows are updated in place: keyboard focus survives server messages', () => {
+    state.running = true; state.activeTab = 'ALL';
+    state.companies = [company({ domain: 'a.com', state: 'scanning', jobs_count: 3, phase: 'Finding the careers page…' }), company({ domain: 'b.com', state: 'queued' })];
+    renderQueue();
+    const list = document.getElementById('queueList');
+    const rowA = list.children[0], stopA = rowA.querySelector('[data-stop]');
+    ok(!stopA.hidden && rowA.textContent.includes('Finding the careers page…'), 'a scanning row shows its phase and a Stop button');
+    stopA.focus(); eq(document.activeElement === stopA, true, 'focus set');
+    for (const phase of ['Reading the Greenhouse job board…', 'Reading Greenhouse jobs 50/120…']) {
+        state.companies[0] = { ...state.companies[0], phase, jobs_count: state.companies[0].jobs_count + 10 }; renderQueue();
+    }
+    ok(list.children[0] === rowA && document.activeElement === stopA, 'same row, focus kept on the Stop button');
+    ok(rowA.textContent.includes('Reading Greenhouse jobs 50/120…') && rowA.textContent.includes('… 23'));
+    state.companies[0] = { ...state.companies[0], state: 'done', outcome: 'blocked', outcome_short: 'blocked', outcome_detail: 'a.com blocked automated access.' }; renderQueue();
+    ok(list.children[0] === rowA && stopA.hidden, 'finished: the Stop button is hidden, the row is the same');
+    ok(rowA.querySelector('[data-reason]').textContent === 'blocked' && rowA.querySelector('[data-glyph]').textContent === '!', 'glyph and reason say blocked');
+    ok(rowA.querySelector('.queue-main').className.includes('has-reason'));
+    state.companies = [state.companies[1], state.companies[0]]; renderQueue();
+    ok(list.children[1] === rowA, 'reordered without rebuilding');
+    state.companies = [state.companies[1]]; renderQueue();
+    eq(list.children.length, 1, 'a removed company leaves'); state.companies = []; renderQueue(); ok(list.textContent.includes('Nothing queued yet.'));
+    state.running = false;
+});
+test('queue rows: a plain success stays on one line, every other outcome says why', () => {
+    state.running = false; state.activeTab = 'ALL';
+    state.companies = [company({ domain: 'ok.com', outcome: 'found', jobs_count: 715 }), ...['no_listings', 'no_careers_page', 'unreachable', 'blocked', 'unsupported', 'timed_out', 'stopped', 'error']
+        .map(outcome => company({ domain: `${outcome}.com`, outcome, outcome_short: outcome.replace(/_/g, ' '), outcome_detail: 'x', state: outcome === 'error' ? 'failed' : outcome === 'timed_out' || outcome === 'stopped' ? 'stopped' : 'done' }))];
+    renderQueue();
+    const items = [...document.getElementById('queueList').children];
+    ok(items[0].querySelector('[data-reason]').hidden && items[0].querySelector('[data-glyph]').textContent === '●', 'found: one line');
+    const glyphs = items.slice(1).map(li => li.querySelector('[data-glyph]').textContent);
+    eq(glyphs, ['–', '–', '!', '!', '–', '!', '■', '×'], 'one glyph per kind of ending');
+    ok(items.slice(1).every(li => !li.querySelector('[data-reason]').hidden), 'each says why');
+    ok(items.slice(1).every(li => li.querySelector('[data-sr]').textContent.length > 10), 'and has text for screen readers');
+    state.companies = []; renderQueue();
+});
+
 test('sortable headers carry aria-sort and a button', () => {
     resetPaneDataForTests(); const pane = new PaneData('ALL'); pane.loadedOnce = true; pane.rows = [job()]; pane.total = 1; pane.sortKey = 'title'; pane.sortDir = 'desc';
     const html = bodyHTML(pane);

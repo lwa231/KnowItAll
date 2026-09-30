@@ -49,6 +49,7 @@ def fetch_jobs(ctx, detection, site):
         batch = [_job(p, detection, site) for p in page[:max(ctx.config.max_jobs - len(jobs), 0)]]
         jobs.extend(batch)
         ctx.emit(batch)
+        ctx.phase(f"Reading SmartRecruiters jobs {len(jobs):,}/{min(total, ctx.config.max_jobs):,}…")
         offset += PAGE_SIZE
     if not jobs:
         # Unknown companies return 200 with totalFound 0 (not 404), so empty means "not this ATS".

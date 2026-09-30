@@ -8,6 +8,7 @@ import { state, on, emit, byDomain, totalJobs } from './state.js';
 import { filters, isFiltering } from './filters.js';
 import { paneData, forgetPaneData, allPaneData } from './jobs.js';
 import { bodyHTML, footerHTML, rowHTML } from './table.js';
+import { paintPhases, tickClocks } from './outcomes.js';
 import { openPopover, closePopover } from './popover.js';
 import { $, $$, esc, clamp, debounce, fmtNum, svgIcon } from './util.js';
 
@@ -86,7 +87,7 @@ function headStat(id) {
 
 function headExtra(id) {
     const c = byDomain(targetOf(id));
-    if (c) return `${c.source || '—'} · ${c.new_count || 0} new`;
+    if (c) return `${c.source || c.outcome_short || '—'} · ${c.new_count || 0} new`;
     return targetOf(id) === 'ALL' && state.companies.length ? `${state.companies.length} in the queue` : '';
 }
 
@@ -105,6 +106,7 @@ function paneHTML(id) {
                 ${isMain ? '' : `<button type="button" class="icon-btn danger" data-return="${esc(id)}" aria-label="Return ${esc(title)} to the tab strip" title="Return to the tab strip">${svgIcon('x')}</button>`}
             </div>
             ${runId ? `<div class="run-banner">Viewing scan #${esc(runId)} <button type="button" class="btn" data-latest="${esc(key)}">Back to latest</button></div>` : ''}
+            ${!runId && byDomain(key)?.careers_note ? `<div class="careers-note">${esc(byDomain(key).careers_note)}</div>` : ''}
             <div class="pane-body" data-pane-body="${esc(id)}" role="region" aria-label="Postings: ${esc(title)}" tabindex="0"></div>`;
 }
 
@@ -511,11 +513,13 @@ export function onServerState(s, previous) {
     state.companies.forEach(c => {                                // give every new company a tab, if there is room
         if (!isPlaced(c.domain) && totalViews() < MAX_VIEWS) { openTabs.push(c.domain); structural = true; }
     });
-    const key = c => `${c.domain}:${c.state}:${c.source}`;
+    // What a pane shows depends on how each company's scan ended, so a new outcome or careers link repaints the panes.
+    const key = c => `${c.domain}:${c.state}:${c.source}:${c.outcome}:${c.careers_url}:${c.careers_note}`;
     if (previous.map(key).join('|') !== state.companies.map(key).join('|')) structural = true;
     renderTabs();
     if (structural) { renderDock(); renderFloats(); }
     else updateHeads();
+    paintPhases();                                                // the "Reading Greenhouse board…" lines change in place
 }
 
 /** Infinite scroll also listens to plain scrolling, so it works even where IntersectionObserver is unreliable. */
@@ -576,6 +580,12 @@ function initDelegates() {
         const retry = e.target.closest('[data-retry]');
         if (retry) { paneData(retry.dataset.retry).refresh(); return; }
         if (e.target.closest('[data-clear-filters]')) { $('#clearFilters').click(); return; }
+        const openCompany = e.target.closest('[data-open-company]');
+        if (openCompany) {
+            document.querySelector('.nav-item[data-view="scraper"]').click();
+            showCompany(openCompany.dataset.openCompany);
+            return;
+        }
         const latest = e.target.closest('[data-latest]');
         if (latest) { delete state.runView[latest.dataset.latest]; forgetPaneData(latest.dataset.latest); renderAll(); emit('active-tab', state.activeTab); }
     });
@@ -608,6 +618,7 @@ function initDataEvents() {
 }
 
 export function initWorkspace() {
+    setInterval(() => tickClocks(), 1000);                        // elapsed time of the companies being scanned
     initTabs();
     initFloatPointer();
     initDelegates();

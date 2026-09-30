@@ -26,6 +26,7 @@
 .pane-body { flex: 1; overflow: auto; min-height: 0; position: relative; }
 .run-banner { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-1) var(--sp-3); background: var(--warn-fill); color: var(--warn); font-size: var(--fs-xs); font-family: var(--font-mono); flex-shrink: 0; }
 .run-banner .btn { min-height: 24px; padding: 0 var(--sp-2); }
+.careers-note { padding: var(--sp-1) var(--sp-3); background: var(--bg-raise); color: var(--text-muted); font-size: var(--fs-xs); font-family: var(--font-mono); flex-shrink: 0; }
 
 .quad-guides { position: absolute; inset: 0; pointer-events: none; display: none; z-index: var(--z-guides); }
 .quad-guides.on { display: block; }
@@ -34,7 +35,7 @@
 .float-layer { position: absolute; inset: 0; pointer-events: none; }
 .float { position: absolute; pointer-events: auto; display: flex; flex-direction: column; background: var(--bg-base); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-float); }
 .float.folded { height: auto !important; }
-.float.folded .pane-body, .float.folded .run-banner { display: none; }
+.float.folded .pane-body, .float.folded .run-banner, .float.folded .careers-note { display: none; }
 .resize-h { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; cursor: nwse-resize; opacity: 0.6;
     background: linear-gradient(135deg, transparent 50%, var(--text-dim) 50%, var(--text-dim) 60%, transparent 60%); }
 .resize-h:hover { opacity: 1; }

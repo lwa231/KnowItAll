@@ -11,14 +11,15 @@ interrupted from outside, so a request that outlives its deadline is abandoned (
 itself, and is counted in stack_stats()['abandoned']) rather than killed.
 """
 import hashlib
+import inspect
 import logging
 import re
 import socket
 import threading
+import time
 import traceback
 from collections import OrderedDict
 from datetime import timedelta
-from functools import lru_cache
 from urllib.parse import urlparse
 
 import requests as plain_requests
@@ -36,8 +37,9 @@ BLOCKED_STATUS = {403, 429, 503}      # bot protection: worth retrying in a real
 SPA_SHELL_RE = re.compile(r'<div id="(root|app|__next)"[^>]*>\s*</div>', re.I)
 
 
-TIMEOUT = 25            # seconds per HTTP request
-DEADLINE = 60           # hard cap per fetch, including any retries inside botasaurus_requests
+TIMEOUT = 20            # seconds per HTTP request (reading the answer)
+CONNECT_TIMEOUT = 8     # seconds to open a connection; a host that resolves but never answers is not worth more
+DEADLINE = 30           # hard cap per fetch, including any retries inside botasaurus_requests and the fallback
 CACHE_TTL = timedelta(hours=12)
 RETRYABLE_STATUS = {403, 408, 429, 500, 502, 503, 504}
 USER_AGENT = (
@@ -65,16 +67,49 @@ def log(message):
     _logger.info(message)
 
 
-@lru_cache(maxsize=1024)
-def host_resolves(host):
-    # Cheap DNS check so probing non-existent subdomains like careers.<domain> skips the HTTP stack.
-    if not host:
-        return False
+# ---------- DNS ----------
+# A cheap lookup so probing non-existent subdomains like careers.<domain> skips the HTTP stack. Answers are
+# remembered briefly: a name that resolved for 10 minutes, a name that did not for only 60 seconds, so one
+# Wi-Fi blip can never make a company "unreachable" for the rest of the session.
+DNS_TTL_FOUND, DNS_TTL_MISSING = 600, 60
+DNS_RETRY_DELAY = 1.0            # a failed lookup is tried once more before the host is declared dead
+_DNS = {}                        # host -> (resolves, expires at monotonic time)
+_dns_lock = threading.Lock()
+
+
+def _lookup(host):
     try:
         socket.getaddrinfo(host, 443)
         return True
     except (OSError, UnicodeError):
         return False
+
+
+def host_resolves(host):
+    if not host:
+        return False
+    with _dns_lock:
+        known = _DNS.get(host)
+        if known and known[1] > time.monotonic():
+            return known[0]
+    found = _lookup(host)
+    if not found:
+        time.sleep(DNS_RETRY_DELAY)
+        found = _lookup(host)
+    with _dns_lock:
+        if len(_DNS) >= 2048:
+            _DNS.clear()
+        _DNS[host] = (found, time.monotonic() + (DNS_TTL_FOUND if found else DNS_TTL_MISSING))
+    return found
+
+
+def clear_dns_cache(negative_only=False):
+    """Forget remembered lookups (only the failed ones with negative_only). Returns how many were dropped."""
+    with _dns_lock:
+        drop = [host for host, (found, _) in _DNS.items() if not (negative_only and found)]
+        for host in drop:
+            del _DNS[host]
+    return len(drop)
 
 
 def log_exception(message):
@@ -128,7 +163,7 @@ def _page(url, final_url=None, status=0, html="", error=None):
 
 def _plain_request(method, url, **kwargs):
     headers = {"User-Agent": USER_AGENT, "Accept-Language": "en-US,en;q=0.9", **kwargs.pop("headers", {})}
-    return plain_requests.request(method, url, headers=headers, timeout=TIMEOUT, **kwargs)
+    return plain_requests.request(method, url, headers=headers, timeout=(CONNECT_TIMEOUT, TIMEOUT), **kwargs)
 
 
 def _is_dead_host(error):
@@ -136,8 +171,15 @@ def _is_dead_host(error):
     return "no such host" in str(error)
 
 
+def _is_timeout(error):
+    # A slow site is not a broken client: retrying with another client only doubles the wait.
+    return isinstance(error, TimeoutError) or "timeout" in type(error).__name__.lower()
+
+
 def _send(req, method, url, headers=None, json=None):
-    """Send with botasaurus' humane client, falling back to plain `requests` if it errors."""
+    """Send with botasaurus' humane client, falling back to plain `requests` if it errors. The whole thing,
+    fallback included, has one DEADLINE, so a host that never answers costs 30 seconds, not 30 + 30."""
+    started = time.monotonic()
     try:
         if method == "POST":
             response = _run_with_deadline(lambda: req.post(url, json=json, headers=headers, timeout=TIMEOUT))
@@ -146,12 +188,13 @@ def _send(req, method, url, headers=None, json=None):
         _count("botasaurus")
         return response
     except Exception as error:
-        if _is_dead_host(error):
+        if _is_dead_host(error) or _is_timeout(error):
             raise
         _logger.info("botasaurus client failed for %s (%s: %s); retrying with plain requests",
                      url, type(error).__name__, str(error)[:120])
         # requests' timeout is per socket read, so a slow-trickling server needs the deadline too.
-        response = _run_with_deadline(lambda: _plain_request(method, url, headers=headers or {}, json=json))
+        remaining = max(DEADLINE - (time.monotonic() - started), 2)
+        response = _run_with_deadline(lambda: _plain_request(method, url, headers=headers or {}, json=json), seconds=remaining)
         _count("requests")
         return response
 
@@ -159,13 +202,15 @@ def _send(req, method, url, headers=None, json=None):
 @request(**_QUIET)
 def _fetch_page(req: Request, url):
     if not host_resolves(urlparse(url).hostname or ""):
-        return _page(url, error="host does not resolve")
+        return DontCache(_page(url, error="host does not resolve"))
     try:
         response = _send(req, "GET", url)
     except Exception as error:
         page = _page(url, error=f"{type(error).__name__}: {error}"[:300])
         return page if _is_dead_host(error) else DontCache(page)
     page = _page(url, str(response.url), response.status_code, response.text or "")
+    if response.status_code == 200 and is_challenge(page):
+        return DontCache({**page, "status": 403, "challenge": True})       # a block page dressed as a 200
     if response.status_code in RETRYABLE_STATUS:
         return DontCache(page)
     return page
@@ -175,7 +220,7 @@ def _fetch_page(req: Request, url):
 def _fetch_json(req: Request, spec):
     url = spec["url"]
     if not host_resolves(urlparse(url).hostname or ""):
-        return {"status": 0, "data": None, "error": "host does not resolve"}
+        return DontCache({"status": 0, "data": None, "error": "host does not resolve"})
     headers = {"Accept": "application/json"}
     if spec.get("method") == "POST":
         headers["Content-Type"] = "application/json"
@@ -247,18 +292,38 @@ def fetch_json_many(ctx, specs, parallel=4):
     return results
 
 
-def render_page(ctx, url):
-    """Load a page in Chrome: through the scan's renderer (the BrowserPool) when it has one."""
+def _call_renderer(ctx, url, mode, count_links):
+    renderer = ctx.config.renderer
+    if mode == "page":
+        return renderer(url, ctx.should_stop)
+    try:
+        accepts = inspect.signature(renderer).parameters
+    except (TypeError, ValueError):
+        accepts = {}
+    if "mode" in accepts or any(p.kind is inspect.Parameter.VAR_KEYWORD for p in accepts.values()):
+        return renderer(url, ctx.should_stop, mode=mode, count_links=count_links, max_jobs=ctx.config.max_jobs)
+    return renderer(url, ctx.should_stop)               # a renderer that only knows how to load a page
+
+
+def render_page(ctx, url, mode="page", count_links=None):
+    """Load a page in Chrome: through the scan's renderer (the BrowserPool) when it has one.
+
+    mode="listing" also scrolls, clicks "load more" and records the JSON the page loads (see BrowserPool.render);
+    `count_links(html)` says how many job links a listing shows so far (to know when to stop waiting or scrolling)."""
     if ctx.should_stop():
         return _page(url, error="stopped")
+    ctx.phase("Loading the page in Chrome…")
     try:
         if ctx.config.renderer:
-            page = ctx.config.renderer(url, ctx.should_stop)
+            page = _call_renderer(ctx, url, mode, count_links)
         else:
             page = _render_page(url, cache=ctx.config.cache, headless=ctx.config.headless)
     except Exception as error:
         page = None
         ctx.log(f"browser failed: {type(error).__name__}: {error}")
+    if page and page.get("status") == 200 and is_challenge(page):
+        ctx.log(f"{url} answered with a bot-protection page even in Chrome")
+        page = {**page, "status": 403, "challenge": True}
     return page or _page(url, error="browser fallback failed (is Google Chrome installed?)")
 
 
@@ -275,8 +340,41 @@ def needs_browser(page, thorough=False):
     return thorough and (visible_text_length(page) < 2000 or bool(SPA_SHELL_RE.search(page["html"])))
 
 
+# Bot-protection "challenge" pages. Many answer 200 with a tiny page, so the status alone does not give them away.
+CHALLENGE_TITLE_RE = re.compile(
+    r"^\s*(access denied|just a moment|attention required|pardon our interruption|are you a robot|robot or human"
+    r"|verify you are|security check|checking your browser|request blocked|one more step)", re.I)
+CHALLENGE_BODY_RE = re.compile(
+    r"errors\.edgesuite\.net|_Incapsula_Resource|px-captcha|captcha-delivery|cf-browser-verification"
+    r"|/cdn-cgi/challenge-platform|Reference\s*#\s*[0-9a-f]+\.[0-9a-f]+|\bcaptcha\b|enable javascript and cookies", re.I)
+TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.I | re.S)
+CHALLENGE_MAX_HTML = 60_000       # a real careers page is bigger than any block page
+CHALLENGE_MAX_LINKS = 8
+
+
+def is_challenge(page):
+    """Is this the bot-protection page (Cloudflare, Akamai, Incapsula, PerimeterX, DataDome) instead of the site?
+
+    A title such as "Access Denied" or "Just a moment..." is enough. Body markers only count on a small page with
+    hardly any links, so an ordinary page that merely mentions a captcha is not mistaken for a block."""
+    html = (page or {}).get("html") or ""
+    if not html:
+        return False
+    title = TITLE_RE.search(html[:30_000])
+    if title and CHALLENGE_TITLE_RE.search(re.sub(r"\s+", " ", title.group(1)).strip()):
+        return True
+    return (len(html) <= CHALLENGE_MAX_HTML and html.lower().count("<a ") < CHALLENGE_MAX_LINKS
+            and bool(CHALLENGE_BODY_RE.search(html)))
+
+
+def is_blocked(page):
+    """The site refused this request: a bot-protection status or a challenge page (even one that answered 200)."""
+    page = page or {}
+    return page.get("status") in BLOCKED_STATUS or bool(page.get("challenge"))
+
+
 def page_ok(page):
-    return bool(page) and page.get("status") == 200 and bool(page.get("html"))
+    return bool(page) and page.get("status") == 200 and bool(page.get("html")) and not page.get("challenge")
 
 
 class _SoupCache:

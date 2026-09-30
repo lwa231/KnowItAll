@@ -166,13 +166,18 @@ def make_job(company, title, url, location=None, remote=None, department=None, s
     }
 
 
+JOB_FRAGMENT_RE = re.compile(r"^job-[\w.~-]+$")
+
+
 def url_key(url):
-    """Comparable form of a URL: no scheme/www/fragment/trailing slash; only gh_jid kept from the query."""
+    """Comparable form of a URL: no scheme/www/trailing slash; only gh_jid kept from the query, and a
+    #job-<id> fragment kept (postings with no page of their own are told apart by it; any other fragment is noise)."""
     parts = urlparse(url or "")
     host = (parts.hostname or "").lower()
     host = host[4:] if host.startswith("www.") else host
     query = urlencode([(k, v) for k, v in parse_qsl(parts.query) if k == "gh_jid"])
-    return f"{host}{parts.path.rstrip('/')}" + (f"?{query}" if query else "")
+    fragment = parts.fragment if JOB_FRAGMENT_RE.match(parts.fragment or "") else ""
+    return f"{host}{parts.path.rstrip('/')}" + (f"?{query}" if query else "") + (f"#{fragment}" if fragment else "")
 
 
 def dedupe(jobs):

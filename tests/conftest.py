@@ -24,6 +24,29 @@ def load_fixture(name):
     return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
+@pytest.fixture(autouse=True)
+def no_external_network(monkeypatch):
+    """No test may reach the internet: results would depend on other people's websites, and a test that does is slow
+    and flaky. Loopback (the app's own server, which tests start) is allowed; DNS lookups of anything else fail."""
+    import socket
+    real_getaddrinfo, real_connect = socket.getaddrinfo, socket.socket.connect
+    local = {"127.0.0.1", "localhost", "::1", "0.0.0.0", ""}
+
+    def getaddrinfo(host, *args, **kwargs):
+        if host in local:
+            return real_getaddrinfo(host, *args, **kwargs)
+        raise socket.gaierror(-2, f"network disabled in tests: {host}")
+
+    def connect(self, address):
+        host = address[0] if isinstance(address, tuple) else address
+        if isinstance(address, tuple) and host not in local:
+            raise OSError(f"network disabled in tests: {host}")
+        return real_connect(self, address)
+
+    monkeypatch.setattr(socket, "getaddrinfo", getaddrinfo)
+    monkeypatch.setattr(socket.socket, "connect", connect)
+
+
 @pytest.fixture
 def fake_fetch(monkeypatch):
     """Route an ATS module's fetch_json / fetch_json_many to canned responses.

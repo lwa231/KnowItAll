@@ -34,8 +34,13 @@
 .queue-list { overflow-y: auto; min-height: 0; padding-bottom: var(--sp-2); }
 .queue-item { display: flex; align-items: center; margin: 0 12px; border-radius: var(--radius); transition: background-color var(--t-fast) var(--ease); }
 .queue-item:hover, .queue-item.selected { background: var(--secondary); }
-.queue-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--sp-3); min-height: 40px; padding: 0 var(--sp-2) 0 var(--sp-4); border-radius: var(--radius); font-family: var(--font-mono); font-size: var(--fs-sm); }
+.queue-main {
+    flex: 1; min-width: 0; display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; column-gap: var(--sp-3); align-items: center; align-content: center;
+    min-height: 40px; padding: 0 var(--sp-2) 0 var(--sp-4); border-radius: var(--radius); font-family: var(--font-mono); font-size: var(--fs-sm);
+}
+.queue-main.has-reason { min-height: 52px; padding-top: 4px; padding-bottom: 4px; }
 .queue-state { width: 14px; text-align: center; flex-shrink: 0; }
+.queue-reason { grid-column: 2 / 4; font-size: var(--fs-xs); line-height: 1.3; }       /* the tone class sets the colour */
 .queue-name { color: var(--text-muted); }
 .queue-item.selected .queue-name { color: var(--accent-text); }
 .queue-meta { margin-left: auto; display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-xs); color: var(--text-dim); flex-shrink: 0; }

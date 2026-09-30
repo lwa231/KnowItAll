@@ -9,6 +9,21 @@ export const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 export const fmtNum = value => Number(value || 0).toLocaleString('en-US');
 export const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+/** The address as a link target, but only if it is an absolute http(s) URL. Anything else ("javascript:...", "data:...",
+ *  relative paths) comes back empty: text scraped from a website must never become a link that runs code in this page. */
+export function safeHref(value) {
+    try {
+        const url = new URL(String(value ?? '').trim());
+        return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : '';
+    } catch { return ''; }
+}
+
+/** Seconds as m:ss ("0:42", "12:05"). */
+export function fmtClock(seconds) {
+    const total = Math.max(0, Math.floor(Number(seconds) || 0));
+    return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
 export function relTime(value, now = Date.now()) {
     if (!value) return '—';
     const date = value instanceof Date ? value : new Date(value);

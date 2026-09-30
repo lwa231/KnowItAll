@@ -112,6 +112,7 @@ def fetch_jobs(ctx, detection, site):
         batch = [_job(base, board, site, p) for p in postings[:max(wanted - len(jobs), 0)]]
         jobs.extend(batch)
         ctx.emit(batch)
+        ctx.phase(f"Reading Workday jobs {len(jobs):,}/{wanted:,}…")
 
     add(first["data"].get("jobPostings") or [])
     specs = [{"url": api, "method": "POST", "json": _payload(offset)} for offset in range(PAGE_SIZE, wanted, PAGE_SIZE)]

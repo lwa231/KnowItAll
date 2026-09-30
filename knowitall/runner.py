@@ -5,17 +5,19 @@ renderer its scans may use. Every scan gets its own ScanContext built from a Run
 Runners - or two consecutive Starts with different options - never influence each other.
 """
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 
-from . import store
-from .context import CancelToken, RunConfig, ScanContext
+from . import outcomes, store
+from .context import TIME_LIMIT, CancelToken, RunConfig, ScanContext
 from .discovery import parse_site
 from .export import export_jobs
-from .fetch import log_exception
+from .fetch import clear_dns_cache, log_exception
 from .scraper import find_jobs
 
 MAX_EVENTS, KEEP_EVENTS = 20000, 10000
 DEFAULT_MAX_JOBS, DEFAULT_MAX_ENRICH = 2000, 50
+DEFAULT_TIME_LIMIT_MIN = 3            # one company never runs longer than this; Settings offers 1 / 3 / 5
 
 
 class Runner:
@@ -26,6 +28,7 @@ class Runner:
         self.order = []            # queue order
         self.events = []           # the UI polls by cursor; trimmed from the front to bound memory
         self._next_id = 0          # monotonic: ids are never reused, even after a trim
+        self.debug = False         # log the JSON a rendered page loads (to build per-site adapters)
         self.notices = {}          # code -> {level, text}: persistent, non-blocking messages for the UI
         self.running = False
         self.cancel = CancelToken()        # Stop for the current run; a fresh one is made by every start()
@@ -105,6 +108,17 @@ class Runner:
         return store.run_jobs(run_id) if run_id else kept
 
     # ---------- control ----------
+    @staticmethod
+    def _new_company(site):
+        return {
+            "domain": site.domain, "company": site.name, "input": site.input_url, "state": "queued",
+            "jobs_count": 0, "new_count": 0, "missing_count": 0, "closed_count": 0, "source": None,
+            "careers_page": None, "run_id": None, "notes": [],
+            # how the last scan ended (outcomes.py), what it is doing right now, and when it started
+            "outcome": None, "outcome_detail": None, "outcome_hint": None, "outcome_short": None,
+            "careers_url": None, "careers_note": None, "phase": None, "started_at": None,
+        }
+
     def queue(self, urls):
         added = []
         for raw in urls:
@@ -116,11 +130,7 @@ class Runner:
             with self.lock:
                 if site.domain in self.companies:
                     continue
-                self.companies[site.domain] = {
-                    "domain": site.domain, "company": site.name, "input": site.input_url, "state": "queued",
-                    "jobs_count": 0, "new_count": 0, "missing_count": 0, "closed_count": 0, "source": None,
-                    "careers_page": None, "run_id": None, "notes": [],
-                }
+                self.companies[site.domain] = self._new_company(site)
                 self.order.append(site.domain)
             added.append(site.domain)
         self.emit("companies")
@@ -140,7 +150,10 @@ class Runner:
                 max_enrich=int(options.get("max_enrich") or DEFAULT_MAX_ENRICH),
                 use_browser=use_browser, headless=self.headless,
                 renderer=self.renderer if use_browser else None,
+                debug_payloads=self.debug,
+                time_limit=float(options.get("time_limit") or (options.get("time_limit_min") or DEFAULT_TIME_LIMIT_MIN) * 60),
             )
+            clear_dns_cache(negative_only=True)             # a name that failed a minute ago may resolve now
             concurrency = max(1, min(4, int(options.get("concurrency") or 3)))
             self.autosave = options.get("autosave", True)
             self.history = options.get("history", True)
@@ -151,7 +164,10 @@ class Runner:
                 if not pending:
                     pending = list(self.order)              # everything finished: pressing Start means "scan again"
                 for domain in pending:
-                    self.companies[domain].update(state="queued", jobs_count=0, new_count=0, missing_count=0, closed_count=0)
+                    self.companies[domain].update(
+                        state="queued", jobs_count=0, new_count=0, missing_count=0, closed_count=0, outcome=None,
+                        outcome_detail=None, outcome_hint=None, outcome_short=None, careers_url=None, careers_note=None,
+                        phase=None)
                     self._jobs.pop(domain, None)
             if not pending:
                 raise LookupError("nothing to scan")
@@ -203,14 +219,27 @@ class Runner:
             self._idle.set()
 
     # ---------- one company ----------
+    def _set_phase(self, domain, text):
+        self._update(domain, phase=text)
+        self.emit("phase", domain=domain, text=text)
+
+    def _record_outcome(self, domain, outcome, message, hint=None, careers_url=None, careers_note=None, short=None,
+                        limit=None):
+        self._update(domain, outcome=outcome, outcome_detail=message, outcome_hint=hint, careers_url=careers_url,
+                     careers_note=careers_note, phase=None,
+                     outcome_short=short if short is not None else outcomes.short(outcome, limit=limit))
+
     def _scrape_one(self, domain, config):
         token = self.tokens[domain]
         if token.is_set():
             self._update(domain, state="stopped")
+            message, hint = outcomes.describe(outcomes.STOPPED, domain, count=0)
+            self._record_outcome(domain, outcomes.STOPPED, message, hint)
             self.emit("companies")
             return
 
-        self._update(domain, state="scanning", jobs_count=0, new_count=0, missing_count=0, closed_count=0)
+        self._update(domain, state="scanning", jobs_count=0, new_count=0, missing_count=0, closed_count=0,
+                     started_at=time.time(), phase="Starting…")
         company = self._read(domain, "company") or domain
         run_id = store.start_run(domain, company) if self.history else None
         self._update(domain, run_id=run_id)
@@ -234,16 +263,26 @@ class Runner:
             # No rows in the event: clients ask /api/jobs for what they show, so a big board never floods the stream.
             self.emit("jobs", domain=domain, added=len(batch), total=len(collected))
 
-        ctx = ScanContext(config, token, log_sink=self.log)
+        # A company never runs past its time limit: the timer cancels its own token, and whatever was found is kept.
+        timer = threading.Timer(config.time_limit, token.cancel, args=(TIME_LIMIT,)) if config.time_limit else None
+        if timer:
+            timer.daemon = True
+            timer.start()
+        ctx = ScanContext(config, token, log_sink=self.log, phase_sink=lambda text: self._set_phase(domain, text))
         try:
             result = find_jobs(ctx, self._read(domain, "input") or domain, on_jobs=on_jobs)
         except Exception as error:
             log_exception(f"{domain}: scrape failed")
+            message, hint = outcomes.describe(outcomes.ERROR, domain)
             self._update(domain, state="failed", notes=[f"{type(error).__name__}: {error}"])
+            self._record_outcome(domain, outcomes.ERROR, message, hint)
             if run_id:
                 store.finish_run(run_id, "failed", None, len(collected), self._read(domain, "new_count", 0))
             self.emit("companies")
             return
+        finally:
+            if timer:
+                timer.cancel()
 
         stopped = bool(result.get("stopped")) or token.is_set()
         state = "stopped" if stopped else "done"
@@ -251,16 +290,25 @@ class Runner:
             domain, company=result.get("company") or company, source=result.get("source"),
             source_detail=result.get("source_detail"), careers_page=(result.get("careers_pages") or [None])[0],
             notes=result.get("notes") or [], jobs_count=len(collected), state=state)
+        outcome = result.get("outcome")
+        message, hint = result.get("outcome_detail"), result.get("outcome_hint")
+        if stopped and outcome not in (outcomes.STOPPED, outcomes.TIMED_OUT):        # Stop arrived as the scan ended
+            outcome = None
+        if outcome is None:
+            outcome = (outcomes.TIMED_OUT if token.reason == TIME_LIMIT else outcomes.STOPPED) if stopped else outcomes.FOUND
+            message, hint = outcomes.describe(outcome, domain, count=len(collected), limit=config.time_limit)
+        self._record_outcome(domain, outcome, message, hint, result.get("careers_url"), result.get("careers_note"),
+                             short=result.get("outcome_short"), limit=config.time_limit)
         if not self.history:
             with self.lock:
                 self._jobs[domain] = collected
         if run_id:
             complete = state == "done" and not result.get("truncated")
-            outcome = store.finish_run(run_id, state, result.get("source"), len(collected),
+            closing = store.finish_run(run_id, state, result.get("source"), len(collected),
                                        self._read(domain, "new_count", 0), complete=complete)
-            if outcome["closed"] or outcome["missing"]:
-                self._update(domain, missing_count=outcome["missing"], closed_count=outcome["closed"])
-                self.log(f"{domain}: {outcome['closed']} posting(s) closed, {outcome['missing']} no longer listed")
+            if closing["closed"] or closing["missing"]:
+                self._update(domain, missing_count=closing["missing"], closed_count=closing["closed"])
+                self.log(f"{domain}: {closing['closed']} posting(s) closed, {closing['missing']} no longer listed")
 
         if collected and self.autosave:
             self._write_files(domain, collected)

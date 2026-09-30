@@ -41,6 +41,11 @@ def _workday(match):
     return Detection("workday", f"{tenant}/{site}", {"tenant": tenant, "wd": wd, "site": site})
 
 
+def _oracle(match):
+    host, lang, site = match.group(1).lower(), match.group(2), match.group(3)
+    return Detection("oracle", f"{host}/{site}", {"host": host, "lang": lang, "site": site})
+
+
 # Each entry: (compiled regex, builder(match) -> Detection)
 PATTERNS = [
     # Greenhouse: embed scripts/iframes, direct API use, then hosted boards (job-boards./boards., incl. EU)
@@ -59,6 +64,9 @@ PATTERNS = [
     # Workday: API path first (…/wday/cxs/{tenant}/{site}), then hosted board with optional locale segment
     (re.compile(r"([a-z0-9-]+)\.(wd\d+)\.myworkdayjobs\.com/wday/cxs/[a-z0-9_-]+/([A-Za-z0-9_-]+)", re.I), _workday),
     (re.compile(r"([a-z0-9-]+)\.(wd\d+)\.myworkdayjobs\.com/(?:[a-z]{2}-[a-z]{2}/)?([A-Za-z0-9_-]+)", re.I), _workday),
+    # Oracle Recruiting Cloud: <pod>.fa[.<region>].oraclecloud.com/hcmUI/CandidateExperience/<lang>/sites/<site>
+    (re.compile(r"([a-z0-9-]+\.fa\.(?:[a-z0-9-]+\.)*oraclecloud\.com)/hcmUI/CandidateExperience/([a-z]{2}(?:[-_][A-Za-z]{2})?)"
+                r"/sites/([A-Za-z0-9_-]+)", re.I), _oracle),
 ]
 
 # Tokens that are URL furniture, not board names.
@@ -68,6 +76,7 @@ IGNORED_TOKENS = {
     "ashby": {"api", "embed", "posting-api"},
     "smartrecruiters": {"static", "oneclick-ui", "v1"},
     "workday": set(),
+    "oracle": set(),
 }
 IGNORED_WORKDAY_SITES = {"wday", "login", "job", "jobs", "details", "apply", "en-us"}
 
@@ -81,7 +90,10 @@ UNSUPPORTED = {
     "jobvite": re.compile(r"jobvite\.com", re.I),
     "workable": re.compile(r"apply\.workable\.com", re.I),
     "bamboohr": re.compile(r"[a-z0-9-]+\.bamboohr\.com/(careers|jobs)", re.I),
+    # Oracle Recruiting Cloud: <pod>.fa.<region>.oraclecloud.com/hcmUI/CandidateExperience/... (e.g. careers.jpmorgan.com)
+    "oracle": re.compile(r"[a-z0-9-]+\.fa\.[a-z0-9.-]*oraclecloud\.com|oraclecloud\.com/hcmUI/CandidateExperience", re.I),
 }
+URL_IN_TEXT_RE = re.compile(r"https?://[^\s\"'<>\\(),;\[\]{}|]+", re.I)
 GH_JID_RE = re.compile(r"[?&]gh_jid=\d+", re.I)
 
 
@@ -89,6 +101,33 @@ def prepare(text):
     """Undo HTML entities and JSON escaping so URLs embedded in scripts/attributes can be matched."""
     text = html_lib.unescape(text or "")
     return text.replace("\\/", "/").replace("\\u002F", "/").replace("\\u002f", "/")
+
+
+def vendor_link(pages, vendor):
+    """The first URL on these pages that belongs to an unsupported vendor (so the UI can offer to open it)."""
+    pattern = UNSUPPORTED[vendor]
+    found = []
+    for page in pages:
+        if not page:
+            continue
+        for url in URL_IN_TEXT_RE.findall(prepare(page.get("html", ""))) + [page.get("final_url", "")]:
+            if pattern.search(url) and url.rstrip(".") not in found:
+                found.append(url.rstrip("."))
+    return max(found, key=_link_rank) if found else None
+
+
+def _link_rank(url):
+    """Which of a vendor's URLs is the best one to send a person to: the job search, not a sign-in page."""
+    score = 0
+    if re.search(r"candidateexperience", url, re.I):
+        score += 2
+    if re.search(r"/(jobs?|requisitions?|careers?)/?(\?.*)?$", url, re.I):
+        score += 3
+    if re.search(r"/sites/[^/]+/?(\?.*)?$", url, re.I):
+        score += 2
+    if re.search(r"sign-?in|log-?in|my-profile|privacy|terms|cookie|register", url, re.I):
+        score -= 5
+    return score
 
 
 def _normalized(value):
@@ -115,7 +154,8 @@ def detect(pages, site):
     for page in pages:
         if not page:
             continue
-        text = prepare(f"{page.get('url', '')} {page.get('final_url', '')} {page.get('html', '')}")
+        text = prepare(f"{page.get('url', '')} {page.get('final_url', '')} {' '.join(page.get('json_urls') or [])} "
+                       f"{page.get('html', '')}")
         for pattern, build in PATTERNS:
             for match in pattern.finditer(text):
                 detection = build(match)
@@ -135,6 +175,7 @@ def detect(pages, site):
     for key, detection in found.items():
         detection.hits = counts[key]
         detections.append(detection)
+    unsupported -= {detection.ats for detection in detections}      # a vendor we can read is not "unsupported"
     # Most mentions first, but a token that matches the company name beats everything
     # (careers pages sometimes link to partners' or portfolio companies' boards).
     detections.sort(key=lambda d: -(d.hits + (1000 if names_match(d.token.split("/")[0], site.slug) else 0)))
