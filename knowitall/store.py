@@ -18,11 +18,17 @@ cap, found nothing at all, or read the company from a different hiring platform 
 The schema is versioned (table `schema_version`) and upgraded by ordered migrations in MIGRATIONS; each runs
 in one transaction and rolls back completely if it fails. Version 1 is the original schema (databases that
 predate the version table are recognised as v1), 2 adds the structured job fields and search index, 3
-replaces the per-run job copies with `postings` (a backup of the database is written first).
+replaces the per-run job copies with `postings`, 4 adds sessions (one per app launch) and how each run ended.
+A backup of the database is written before any migration that rewrites it.
+
+A posting is only declared closed after two complete scans that both miss it AND at least CLOSE_AFTER (24 hours)
+between the first miss and the second. Two scans a minute apart - or two scans answered from the same cached pages -
+are one observation, not two.
 """
 import re
 import sqlite3
 import threading
+import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -33,6 +39,7 @@ DB_PATH = paths.DB_PATH
 
 _local = threading.local()
 _write_lock = threading.Lock()
+CLOSE_AFTER = timedelta(hours=24)          # how long a posting must have been missing before a second miss closes it
 
 # ---------- schema and migrations ----------
 
@@ -200,7 +207,23 @@ def _migrate_v3(conn):
         conn.execute(statement)
 
 
-MIGRATIONS = [(1, _migrate_v1), (2, _migrate_v2), (3, _migrate_v3)]
+def _migrate_v4(conn):
+    """Sessions (one per app launch) and how each run ended. Additive: nothing existing is rewritten."""
+    conn.execute("""CREATE TABLE IF NOT EXISTS sessions (
+        id          TEXT PRIMARY KEY,
+        started_at  TEXT,
+        ended_at    TEXT,
+        app_version TEXT
+    )""")
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(runs)")}
+    for name in ("session_id", "outcome", "outcome_detail"):
+        if name not in existing:
+            conn.execute(f"ALTER TABLE runs ADD COLUMN {name} TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_runs_session ON runs(session_id)")
+
+
+MIGRATIONS = [(1, _migrate_v1), (2, _migrate_v2), (3, _migrate_v3), (4, _migrate_v4)]
+REWRITING = (3,)              # migrations that rewrite tables (a backup is written first); the rest only add
 
 
 def now_iso():
@@ -243,32 +266,41 @@ def _backup(conn, from_version):
     target = path.with_name(f"{path.name}.v{from_version}.bak")
     if target.exists():
         return target
-    destination = sqlite3.connect(str(target))
+    # Copied through a second connection: SQLite's backup cannot run from the connection that holds the write lock
+    # (init() takes it first, so two processes never migrate at once), but a reader may copy the committed data.
+    source, destination = sqlite3.connect(str(path)), sqlite3.connect(str(target))
     try:
-        conn.backup(destination)
+        source.backup(destination)
     finally:
         destination.close()
+        source.close()
     return target
 
 
 def init():
-    """Create or upgrade the database. Safe to call on every start."""
+    """Create or upgrade the database. Safe to call on every start, and from several processes at once: the write
+    lock is taken FIRST and the version re-read inside it, so a second process that arrives mid-migration waits,
+    then finds nothing left to do (it used to read the version before locking and migrate a second time)."""
     conn = connect()
     with _write_lock:
-        conn.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)")
-        conn.commit()
-        current = schema_version(conn)
-        if current == 0 and _table_exists(conn, "runs"):
-            conn.execute("INSERT INTO schema_version (version) VALUES (1)")     # a database from before versioning
-            conn.commit()
-            current = 1
+        conn.execute("BEGIN IMMEDIATE")                        # serialises processes, not just threads
+        try:
+            conn.execute("CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)")
+            if schema_version(conn) == 0 and _table_exists(conn, "runs"):
+                conn.execute("INSERT INTO schema_version (version) VALUES (1)")     # a database from before versioning
+            started_at = schema_version(conn)                    # what the file was when we arrived: the backup's name
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
         for version, migrate in MIGRATIONS:
-            if version <= current:
-                continue
-            if version == 3:
-                _backup(conn, current)
-            conn.execute("BEGIN IMMEDIATE")
+            conn.execute("BEGIN IMMEDIATE")                    # one transaction per migration, lock first...
             try:
+                if version <= schema_version(conn):            # ...then look: another process may have done it already
+                    conn.execute("COMMIT")
+                    continue
+                if version in REWRITING:
+                    _backup(conn, started_at)
                 migrate(conn)
                 conn.execute("INSERT INTO schema_version (version) VALUES (?)", (version,))
                 conn.execute("COMMIT")
@@ -277,18 +309,84 @@ def init():
                 raise
 
 
+# ---------- sessions ----------
+
+def start_session(app_version=""):
+    """Record that the app was launched. Returns the session id; History and the feed show only the current one."""
+    conn = connect()
+    session_id = uuid.uuid4().hex
+    with _write_lock:
+        conn.execute("INSERT INTO sessions (id, started_at, app_version) VALUES (?, ?, ?)", (session_id, now_iso(), app_version))
+        conn.commit()
+    return session_id
+
+
+def end_session(session_id):
+    conn = connect()
+    with _write_lock:
+        conn.execute("UPDATE sessions SET ended_at = ? WHERE id = ? AND ended_at IS NULL", (now_iso(), session_id))
+        conn.commit()
+
+
+def session_started(session_id):
+    row = connect().execute("SELECT started_at FROM sessions WHERE id = ?", (session_id,)).fetchone()
+    return row["started_at"] if row else None
+
+
+def mark_interrupted(session_id=None):
+    """A run still 'running' in an earlier session belongs to an app that was killed: it can never finish. Mark it
+    'interrupted' so it is not current and pruning can clean it up. Returns how many."""
+    conn = connect()
+    with _write_lock:
+        count = conn.execute(
+            "UPDATE runs SET status = 'interrupted', finished_at = ? WHERE status = 'running'"
+            " AND COALESCE(session_id, '') != COALESCE(?, '')", (now_iso(), session_id)).rowcount
+        conn.commit()
+    return count
+
+
+def backup_to(path):
+    """A consistent copy of the live database at `path`, made with SQLite's backup API (safe in WAL mode, and while
+    other threads write). Copying the file itself could miss what is still in the -wal file."""
+    destination = sqlite3.connect(str(path))
+    try:
+        connect().backup(destination)
+    finally:
+        destination.close()
+    return Path(path)
+
+
+def data_fingerprint():
+    """A cheap summary of what the database holds, to tell whether anything changed since the last backup. None when
+    there is nothing worth backing up (no file, no scans)."""
+    if not Path(DB_PATH).exists():
+        return None
+    try:
+        conn = connect()
+        if not _table_exists(conn, "runs"):
+            return None
+        runs = conn.execute("SELECT COUNT(*), COALESCE(MAX(id), 0), COALESCE(MAX(finished_at), '') FROM runs").fetchone()
+        if not runs[0]:
+            return None
+        posts = (conn.execute("SELECT COUNT(*), COALESCE(MAX(last_seen), ''), COUNT(closed_at), COUNT(missing_since) FROM postings").fetchone()
+                 if _table_exists(conn, "postings") else ())
+        return f"v{schema_version(conn)}|{tuple(runs)}|{tuple(posts)}"
+    except sqlite3.DatabaseError:
+        return "unreadable"
+
+
 def fts_enabled(conn=None):
     return _table_exists(conn or connect(), "postings_fts")
 
 
 # ---------- runs and postings ----------
 
-def start_run(domain, company):
+def start_run(domain, company, session_id=None):
     conn = connect()
     with _write_lock:
         cur = conn.execute(
-            "INSERT INTO runs (domain, company, status, started_at) VALUES (?, ?, 'running', ?)",
-            (domain, company, now_iso()),
+            "INSERT INTO runs (domain, company, status, started_at, session_id) VALUES (?, ?, 'running', ?, ?)",
+            (domain, company, now_iso(), session_id),
         )
         conn.commit()
     return cur.lastrowid
@@ -365,39 +463,57 @@ def _close_missing(conn, run_id, domain, source, now):
         (domain, run_id)).fetchone()
     if previous and _base_source(previous["source"]) != _base_source(source):
         return {"missing": 0, "closed": 0, "skipped": "source changed"}
+    # Closed only when the first miss is at least CLOSE_AFTER old: a second miss a minute later is the same observation.
+    cutoff = (datetime.fromisoformat(now) - CLOSE_AFTER).isoformat()
     closed = conn.execute(
         "UPDATE postings SET closed_at = ? WHERE domain = ? AND closed_at IS NULL AND missing_since IS NOT NULL"
-        " AND COALESCE(last_run_id, 0) != ?", (now, domain, run_id)).rowcount
+        " AND missing_since <= ? AND COALESCE(last_run_id, 0) != ?", (now, domain, cutoff, run_id)).rowcount
     missing = conn.execute(
         "UPDATE postings SET missing_since = ? WHERE domain = ? AND closed_at IS NULL AND missing_since IS NULL"
         " AND COALESCE(last_run_id, 0) != ?", (now, domain, run_id)).rowcount
     return {"missing": missing, "closed": closed}
 
 
-def finish_run(run_id, status, source, jobs_count, new_count, complete=False):
+def finish_run(run_id, status, source, jobs_count, new_count, complete=False, outcome=None, outcome_detail=None):
     """Close out a run. `complete` says the scan read the company's whole listing (not stopped, not cut
     short by a size cap); only then, and only if it found something, may postings be marked missing/closed.
     Returns {"missing": n, "closed": n} for what this run changed."""
     conn = connect()
     now = now_iso()
-    outcome = {"missing": 0, "closed": 0}
+    closing = {"missing": 0, "closed": 0}
     with _write_lock:
         conn.execute(
-            "UPDATE runs SET status=?, source=?, jobs_count=?, new_count=?, finished_at=? WHERE id=?",
-            (status, source, jobs_count, new_count, now, run_id),
+            "UPDATE runs SET status=?, source=?, jobs_count=?, new_count=?, finished_at=?, outcome=?, outcome_detail=?"
+            " WHERE id=?", (status, source, jobs_count, new_count, now, outcome, outcome_detail, run_id),
         )
         row = conn.execute("SELECT domain FROM runs WHERE id = ?", (run_id,)).fetchone()
         if complete and status == "done" and jobs_count and row:
-            outcome = _close_missing(conn, run_id, row["domain"], source, now)
+            closing = _close_missing(conn, run_id, row["domain"], source, now)
         conn.commit()
-    return outcome
+    return closing
 
 
-def history(limit=200):
+def history(limit=200, session_id=None):
+    """Runs, newest first; with `session_id`, only that session's (what History shows)."""
     conn = connect()
+    where, params = ("WHERE session_id = ?", [session_id]) if session_id else ("", [])
     return [dict(row) for row in conn.execute(
-        "SELECT id, domain, company, source, status, started_at, finished_at, jobs_count, new_count"
-        " FROM runs ORDER BY id DESC LIMIT ?", (limit,))]
+        "SELECT id, domain, company, source, status, started_at, finished_at, jobs_count, new_count, outcome,"
+        f" outcome_detail FROM runs {where} ORDER BY id DESC LIMIT ?", params + [limit])]
+
+
+def run_match_counts(raw_filters, run_ids):
+    """{run_id: how many of that run's postings match the filters}: History's "matches" column."""
+    if not run_ids:
+        return {}
+    conn = connect()
+    filters = normalize_filters(raw_filters)
+    filters["status"], filters["run_id"] = "runs", None
+    from_sql, where, params = _where(filters, conn)
+    marks = ",".join("?" * len(run_ids))
+    rows = conn.execute(f"SELECT rp.run_id AS run_id, COUNT(*) AS n FROM {from_sql} WHERE {where} AND rp.run_id IN ({marks})"
+                        " GROUP BY rp.run_id", params + list(run_ids)).fetchall()
+    return {row["run_id"]: row["n"] for row in rows}
 
 
 JOB_SELECT = ("p.company, p.title, p.url, p.location, p.remote, p.department, p.posted, p.source,"
@@ -541,6 +657,8 @@ def normalize_filters(raw):
     filters["new_only"] = _as_bool(first("new_only")) if first("new_only") is not None else False
     run_id = first("run_id")
     filters["run_id"] = _as_int("run_id", run_id, 1, 2**62) if run_id not in (None, "") else None
+    session = first("session_id")                          # set by the service for session=current; not a public filter
+    filters["session_id"] = str(session)[:64] if session else None
     status = str(first("status") or "current").lower()
     if status not in STATUSES:
         raise ValueError(f"status must be one of {', '.join(STATUSES)}")
@@ -555,7 +673,19 @@ def normalize_filters(raw):
     filters["order"] = order
     filters["limit"] = _as_int("limit", first("limit") or DEFAULT_LIMIT, 1, MAX_LIMIT)
     filters["offset"] = _as_int("offset", first("offset") or 0, 0, 10**9)
-    filters["facets"] = _as_bool(first("facets")) if first("facets") is not None else True
+    # facets: true/false, or a comma list of the ones wanted ("domain": just the per-company counts, which is cheap)
+    wanted = first("facets")
+    filters["facet_names"] = None
+    if wanted is None:
+        filters["facets"] = True
+    elif str(wanted).strip().lower() in {"1", "true", "yes", "on", "0", "false", "no", "off", ""}:
+        filters["facets"] = _as_bool(wanted)
+    else:
+        names = [n.strip() for n in str(wanted).split(",") if n.strip()]
+        bad = [n for n in names if n not in FACET_FIELDS]
+        if bad:
+            raise ValueError(f"unknown facet: {', '.join(bad)}")
+        filters["facets"], filters["facet_names"] = True, names
     return filters
 
 
@@ -577,12 +707,19 @@ def _scope(filters):
     if filters["run_id"]:
         return ("postings p JOIN run_postings rp ON rp.posting_id = p.id AND rp.run_id = ?",
                 [filters["run_id"]], "")
+    session = filters.get("session_id")
+    if filters["status"] == "runs":                        # every run's links (History's per-run match counts)
+        return ("postings p JOIN run_postings rp ON rp.posting_id = p.id", [], "")
     if filters["status"] == "current":
-        return ("postings p JOIN run_postings rp ON rp.posting_id = p.id", [],
-                f"rp.run_id IN (SELECT MAX(id) FROM runs WHERE status IN {LIVE_STATUSES} GROUP BY domain)")
+        mine = " AND session_id = ?" if session else ""
+        return ("postings p JOIN run_postings rp ON rp.posting_id = p.id", [session] if session else [],
+                f"rp.run_id IN (SELECT MAX(id) FROM runs WHERE status IN {LIVE_STATUSES}{mine} GROUP BY domain)")
     state = ("p.missing_since IS NOT NULL AND p.closed_at IS NULL" if filters["status"] == "missing"
              else "p.closed_at IS NOT NULL")
-    return ("postings p LEFT JOIN run_postings rp ON rp.posting_id = p.id AND rp.run_id = p.last_run_id", [], state)
+    if session:                                            # gone/closed only for the companies scanned this session
+        state += " AND p.domain IN (SELECT domain FROM runs WHERE session_id = ?)"
+    return ("postings p LEFT JOIN run_postings rp ON rp.posting_id = p.id AND rp.run_id = p.last_run_id",
+            [session] if session else [], state)
 
 
 def _where(filters, conn, skip=None):
@@ -591,7 +728,7 @@ def _where(filters, conn, skip=None):
     clauses = [scope_where] if scope_where else []
 
     for name, (expression, nullable) in FACET_FIELDS.items():
-        if name == skip or not filters.get(name):
+        if name in (skip, "country") or not filters.get(name):
             continue
         values = [v.lower() for v in filters[name]] if name == "department" else filters[name]
         expr = f"lower({expression})" if name == "department" else expression
@@ -599,8 +736,14 @@ def _where(filters, conn, skip=None):
         clauses.append(sql)
         params += more
 
-    if filters["region_group"] and skip != "country":
+    # The Region chip holds regions, countries and "no location" together, and they add up (a union): EMEA + Japan +
+    # "include postings with no location" is three ways to match, not three conditions that must all hold.
+    if skip != "country" and (filters["country"] or filters["region_group"]):
         parts = []
+        if filters["country"]:
+            sql, more = _in_clause("p.country", filters["country"], True)
+            parts.append(sql)
+            params += more
         for group in filters["region_group"]:
             countries = sorted(geo.region_group_countries(group))
             if countries:
@@ -685,7 +828,8 @@ def query_jobs(raw_filters=None):
         rows = conn.execute(
             f"SELECT {QUERY_SELECT} FROM {from_sql} WHERE {where} ORDER BY {order} LIMIT ? OFFSET ?",
             params + [filters["limit"], filters["offset"]]).fetchall()
-        facets = {name: _facet(conn, filters, name) for name in FACET_FIELDS} if filters["facets"] else None
+        names = filters["facet_names"] or list(FACET_FIELDS)
+        facets = {name: _facet(conn, filters, name) for name in names} if filters["facets"] else None
     except sqlite3.OperationalError as error:
         if "fts5" in str(error).lower() or "malformed match" in str(error).lower():
             raise ValueError("could not understand that search") from None
@@ -693,6 +837,7 @@ def query_jobs(raw_filters=None):
     result = {"jobs": [_posting_dict(row) for row in rows],
               "total": total, "limit": filters["limit"], "offset": filters["offset"]}
     if facets is not None:
-        facets["region_group"] = [{"value": key, "label": label} for key, label in geo.region_groups()]
+        if not filters["facet_names"]:
+            facets["region_group"] = [{"value": key, "label": label} for key, label in geo.region_groups()]
         result["facets"] = facets
     return result

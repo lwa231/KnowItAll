@@ -100,6 +100,11 @@ def normalize_country(value):
     return countries["names"].get(folded)
 
 
+def all_countries():
+    """Every country we know, [{code, name}] sorted by name: the choices the Region filter offers before anything is scanned."""
+    return sorted(({"code": code, "name": country_name(code) or code} for code in _countries()["codes"]), key=lambda c: fold(c["name"]))
+
+
 def country_name(iso):
     return _countries()["canonical"].get(iso)
 

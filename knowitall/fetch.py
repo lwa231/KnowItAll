@@ -135,7 +135,14 @@ def stack_stats():
         return {**_STATS, "abandoned": len(_ABANDONED)}
 
 
-def _run_with_deadline(fn, seconds=DEADLINE):
+class Stopped(Exception):
+    """The scan was stopped while a request was in flight; the request was abandoned."""
+
+
+def _run_with_deadline(fn, seconds=DEADLINE, should_cancel=None):
+    """Run fn in a helper thread and wait for it in short slices. Gives up (abandoning the thread, which finishes by
+    itself) when `seconds` pass (TimeoutError) or `should_cancel()` turns true (Stopped), so neither a slow site nor
+    Stop has to wait for a request that cannot be interrupted. seconds=None waits only for cancellation."""
     box = {}
 
     def target():
@@ -146,12 +153,22 @@ def _run_with_deadline(fn, seconds=DEADLINE):
 
     thread = threading.Thread(target=target, daemon=True)
     thread.start()
-    thread.join(seconds)
-    if thread.is_alive():
-        with _stats_lock:
-            _STATS["timeouts"] += 1
-            _ABANDONED.append(thread)
-        raise TimeoutError(f"no response after {seconds}s")
+    end = None if seconds is None else time.monotonic() + seconds
+    while True:
+        thread.join(0.2 if (should_cancel or seconds is None) else seconds)
+        if not thread.is_alive():
+            break
+        abandon = None
+        if should_cancel and should_cancel():
+            abandon = Stopped("stopped")
+        elif end is not None and time.monotonic() >= end:
+            abandon = TimeoutError(f"no response after {seconds}s")
+            with _stats_lock:
+                _STATS["timeouts"] += 1
+        if abandon:
+            with _stats_lock:
+                _ABANDONED.append(thread)
+            raise abandon
     if "error" in box:
         raise box["error"]
     return box.get("value")
@@ -199,8 +216,7 @@ def _send(req, method, url, headers=None, json=None):
         return response
 
 
-@request(**_QUIET)
-def _fetch_page(req: Request, url):
+def _page_body(req, url):
     if not host_resolves(urlparse(url).hostname or ""):
         return DontCache(_page(url, error="host does not resolve"))
     try:
@@ -216,8 +232,7 @@ def _fetch_page(req: Request, url):
     return page
 
 
-@request(**_QUIET)
-def _fetch_json(req: Request, spec):
+def _json_body(req, spec):
     url = spec["url"]
     if not host_resolves(urlparse(url).hostname or ""):
         return DontCache({"status": 0, "data": None, "error": "host does not resolve"})
@@ -238,6 +253,40 @@ def _fetch_json(req: Request, spec):
     return result
 
 
+# "Reuse downloaded pages for": botasaurus fixes a cache entry's lifetime where the function is decorated, so there is
+# one pair of fetchers per lifetime. The 1-hour pair has its own names, hence its own cache folder: an entry written
+# with a 12-hour life can never be served to someone who asked for one hour. "Off" bypasses the cache (cache="REFRESH").
+@request(**_QUIET)
+def _fetch_page(req: Request, url):
+    return _page_body(req, url)
+
+
+@request(**_QUIET)
+def _fetch_json(req: Request, spec):
+    return _json_body(req, spec)
+
+
+_QUIET_1H = {**_QUIET, "expires_in": timedelta(hours=1)}
+
+
+@request(**_QUIET_1H)
+def _fetch_page_1h(req: Request, url):
+    return _page_body(req, url)
+
+
+@request(**_QUIET_1H)
+def _fetch_json_1h(req: Request, spec):
+    return _json_body(req, spec)
+
+
+def _page_fetcher(ctx):
+    return _fetch_page_1h if ctx.config.reuse == "1h" else _fetch_page
+
+
+def _json_fetcher(ctx):
+    return _fetch_json_1h if ctx.config.reuse == "1h" else _fetch_json
+
+
 @browser(headless=True, block_images_and_css=True, **_QUIET)
 def _render_page(driver: Driver, url):
     try:
@@ -256,29 +305,40 @@ def _chunks(items, size):
         yield items[start:start + size]
 
 
+def _cancellable(ctx, fn, fallback):
+    """fn() in a way Stop can interrupt; `fallback` is what a stopped call returns."""
+    try:
+        return _run_with_deadline(fn, None, ctx.should_stop)
+    except Stopped:
+        return fallback
+
+
 def fetch_page(ctx, url):
     if ctx.should_stop():
         return _page(url, error="stopped")
-    return _fetch_page(url, cache=ctx.config.cache)
+    return _cancellable(ctx, lambda: _page_fetcher(ctx)(url, cache=ctx.config.cache), _page(url, error="stopped"))
 
 
-def fetch_pages(ctx, urls, parallel=8):
-    """Fetch several pages at once. Stop is honoured between batches of `parallel`, so at most one
-    batch is still in flight when it is pressed; the rest come back as 'stopped'."""
+def fetch_pages(ctx, urls, parallel=4):
+    """Fetch several pages at once, `parallel` at a time. Stop is honoured while a batch is in flight (it is abandoned)
+    and between batches; everything not yet answered comes back as 'stopped'."""
     urls = list(dict.fromkeys(urls))
     pages = []
     for batch in _chunks(urls, parallel):
         if ctx.should_stop():
             pages.extend(_page(url, error="stopped") for url in batch)
             continue
-        pages.extend(_fetch_page(batch, cache=ctx.config.cache, parallel=len(batch)))
+        stopped = [_page(url, error="stopped") for url in batch]
+        pages.extend(_cancellable(
+            ctx, lambda batch=batch: _page_fetcher(ctx)(batch, cache=ctx.config.cache, parallel=len(batch)), stopped))
     return pages
 
 
 def fetch_json(ctx, url, method="GET", json=None):
     if ctx.should_stop():
         return dict(STOPPED_JSON)
-    return _fetch_json({"url": url, "method": method, "json": json}, cache=ctx.config.cache)
+    return _cancellable(ctx, lambda: _json_fetcher(ctx)({"url": url, "method": method, "json": json}, cache=ctx.config.cache),
+                        dict(STOPPED_JSON))
 
 
 def fetch_json_many(ctx, specs, parallel=4):
@@ -288,7 +348,9 @@ def fetch_json_many(ctx, specs, parallel=4):
         if ctx.should_stop():
             results.extend(dict(STOPPED_JSON) for _ in batch)
             continue
-        results.extend(_fetch_json(batch, cache=ctx.config.cache, parallel=len(batch)))
+        stopped = [dict(STOPPED_JSON) for _ in batch]
+        results.extend(_cancellable(
+            ctx, lambda batch=batch: _json_fetcher(ctx)(batch, cache=ctx.config.cache, parallel=len(batch)), stopped))
     return results
 
 

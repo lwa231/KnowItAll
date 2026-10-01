@@ -152,4 +152,4 @@ def test_a_snapshot_is_a_copy_that_later_changes_cannot_reach():
     runner.queue(["a.com"])
     snap = runner.snapshot()
     runner._update("a.com", state="done", notes=["late"])
-    assert snap["companies"][0]["state"] == "queued" and snap["companies"][0]["notes"] == []
+    assert snap["companies"][0]["state"] == "ready" and snap["companies"][0]["notes"] == []

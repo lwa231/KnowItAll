@@ -44,16 +44,24 @@ def _remove_files(folder, older_than=None):
     return {"files": removed, "bytes": freed}
 
 
-def prune_cache(folder=None, max_age_days=CACHE_MAX_AGE_DAYS, now=None):
+REUSE_SECONDS = {"off": 0, "1h": 3600, "12h": 12 * 3600}
+
+
+def prune_cache(folder=None, max_age_days=CACHE_MAX_AGE_DAYS, now=None, max_age_seconds=None):
+    """Delete cache files older than the limit (by default 7 days; the app passes the reuse lifetime the person chose,
+    since a file older than that can never be used again)."""
     folder = folder or paths.CACHE_DIR
     if not os.path.isdir(folder):
         return {"files": 0, "bytes": 0}
-    return _remove_files(folder, older_than=(now or time.time()) - max_age_days * 86400)
+    age = max_age_seconds if max_age_seconds is not None else max_age_days * 86400
+    return _remove_files(folder, older_than=(now or time.time()) - age)
 
 
 def clear_cache(folder=None):
+    """Delete the saved pages and forget the in-memory lookups. Never touches history.db, exports or backups."""
     folder = folder or paths.CACHE_DIR
     fetch._SOUPS.clear()
+    fetch.clear_dns_cache()
     if not os.path.isdir(folder):
         return {"files": 0, "bytes": 0}
     return _remove_files(folder)
@@ -69,10 +77,11 @@ def usage():
     }
 
 
-def run_startup_prune():
+def run_startup_prune(reuse="12h"):
     """Everything that is safe to do while starting. Never raises: housekeeping must not stop the app."""
     summary = {}
-    for name, action in (("cache", prune_cache), ("history", store.prune)):
+    for name, action in (("cache", lambda: prune_cache(max_age_seconds=REUSE_SECONDS.get(reuse, REUSE_SECONDS["12h"]))),
+                         ("history", store.prune)):
         try:
             summary[name] = action()
         except Exception as error:

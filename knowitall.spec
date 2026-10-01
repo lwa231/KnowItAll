@@ -11,14 +11,16 @@
 # skipped without it); on Windows the Edge WebView2 Runtime is needed for the window.
 from PyInstaller.utils.hooks import collect_all, collect_data_files
 
-datas = [("ui", "ui"), ("knowitall/data", "knowitall/data")]   # the interface, and the curated location data
+datas = [("ui", "ui"), ("knowitall/data", "knowitall/data"), ("knowitall/assets", "knowitall/assets")]   # the interface, the curated location data, the app icons
 binaries = []
 hiddenimports = [
     "knowitall", "knowitall.paths", "knowitall.logsetup", "knowitall.shell", "knowitall.geo", "knowitall.search", "knowitall.server", "knowitall.runner", "knowitall.browser",
     "knowitall.store", "knowitall.scraper", "knowitall.fetch", "knowitall.discovery",
     "knowitall.generic", "knowitall.normalize", "knowitall.ats_detect",
+    "knowitall.compat", "knowitall.context", "knowitall.export", "knowitall.maintenance", "knowitall.service", "knowitall.settings",
+    "knowitall.outcomes", "knowitall.json_jobs", "knowitall.adapters",
     "knowitall.ats", "knowitall.ats.greenhouse", "knowitall.ats.lever", "knowitall.ats.ashby",
-    "knowitall.ats.smartrecruiters", "knowitall.ats.workday",
+    "knowitall.ats.smartrecruiters", "knowitall.ats.workday", "knowitall.ats.oracle",
 ]
 
 # botasaurus ships data files and a Go HTTP client binary; grab everything it needs.
@@ -54,6 +56,7 @@ exe = EXE(
     strip=False,
     upx=False,
     console=True,          # keep the console: it shows the scraper log and any startup error
+    icon="knowitall/assets/icons/knowitall.ico",
 )
 
 coll = COLLECT(
@@ -62,3 +65,12 @@ coll = COLLECT(
     upx=False,
     name="KnowItAll",
 )
+
+# macOS: a proper app bundle, so the Dock and menu bar say KnowItAll with the KiA icon
+import sys
+if sys.platform == "darwin":
+    app = BUNDLE(
+        coll, name="KnowItAll.app", icon="knowitall/assets/icons/knowitall.icns",
+        bundle_identifier="com.knowitall.desktop",
+        info_plist={"CFBundleName": "KnowItAll", "NSHighResolutionCapable": True},
+    )

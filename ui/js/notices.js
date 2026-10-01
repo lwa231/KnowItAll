@@ -23,6 +23,6 @@ export function initNotices() {
         const dismiss = event.target.closest('[data-dismiss]');
         if (dismiss) { dismissed.add(dismiss.dataset.dismiss); renderNotices(); return; }
         const open = event.target.closest('[data-open-view]');
-        if (open) document.querySelector(`.nav-item[data-view="${open.dataset.openView}"]`).click();
+        if (open) document.querySelector(`.rail-item[data-view="${open.dataset.openView}"]`).click();
     });
 }

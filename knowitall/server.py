@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from . import paths, store
+from .fetch import log_exception
 from .service import Service
 
 UI_DIR = paths.asset_dir() / "ui"
@@ -132,7 +133,27 @@ class Handler(BaseHTTPRequestHandler):
         return data if isinstance(data, dict) else None
 
     # ---------- routes ----------
+    def _guarded(self, route):
+        """Every route runs inside this: an unexpected error answers 500 (and is logged) instead of dropping the connection."""
+        try:
+            return route()
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            raise
+        except Exception:
+            log_exception(f"{self.command} {self.path} failed")
+            try:
+                self.close_connection = True
+                self._send({"error": "internal error; details are in the log"}, status=500, close=True)
+            except OSError:
+                pass
+
     def do_GET(self):
+        return self._guarded(self._get)
+
+    def do_POST(self):
+        return self._guarded(self._post)
+
+    def _get(self):
         if not self._local_only():
             return self._reject(403, "forbidden")
         route = urlparse(self.path)
@@ -158,6 +179,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/settings":
             return self._send(self.service.get_settings())
 
+        if path == "/api/geo/countries":
+            return self._send(self.service.countries())
+
         if path == "/api/system":
             return self._send(self.service.system_info())
 
@@ -168,7 +192,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send({"error": str(error)}, status=400)
 
         if path == "/api/history":
-            return self._send(self.service.history())
+            try:
+                query.pop("limit", None)
+                mode = (query.pop("session", None) or ["current"])[0]
+                has_filters = any(v for k, v in query.items() if k != "session_id")
+                return self._send(self.service.history(session=mode, filters=query if has_filters else None))
+            except ValueError as error:
+                return self._send({"error": str(error)}, status=400)
+
+        if path == "/api/backups":
+            return self._send({"backups": self.service.list_backups()})
 
         if path == "/api/maintenance":
             return self._send(self.service.maintenance_status())
@@ -178,7 +211,7 @@ class Handler(BaseHTTPRequestHandler):
 
         return self._send({"error": "not found"}, status=404)
 
-    def do_POST(self):
+    def _post(self):
         if not self._local_only():
             return self._reject(403, "forbidden")
         path = urlparse(self.path).path
@@ -194,17 +227,32 @@ class Handler(BaseHTTPRequestHandler):
         if data is None:
             return self._reject(400, "body must be a JSON object")
 
-        if path == "/api/run":
-            urls = [u for u in (data.get("urls") or []) if str(u).strip()]
-            started = self.service.start(urls, data.get("options") or {})
-            return self._send({"started": started})
-
-        if path == "/api/queue":
-            return self._send({"added": self.service.queue(data.get("urls") or [])})
+        try:
+            if path == "/api/scan":
+                return self._send(self.service.scan(self._urls(data)))
+            if path == "/api/start":
+                return self._send({"started": self.service.start_ready()})
+            if path == "/api/backups":
+                return self._send({"backup": self.service.create_backup("manual")})
+            if path == "/api/backups/open-folder":
+                return self._send({"opened": self.service.open_backups()})
+            if path == "/api/filters":
+                return self._send({"filters": self.service.set_filters(data.get("filters"))})
+            if path == "/api/parallel":
+                return self._send(self.service.set_parallel(data.get("n")))
+            if path == "/api/run":                                    # older clients and the command line's shape
+                started = self.service.start(self._urls(data), data.get("options") or {})
+                return self._send({"started": started})
+            if path == "/api/queue":
+                return self._send({"added": self.service.queue(self._urls(data))})
+        except ValueError as error:                                   # a bad value is the caller's mistake, not ours
+            return self._send({"error": str(error)}, status=400)
 
         if path == "/api/stop":
-            self.service.stop(data.get("domain") or None)
-            return self._send({"stopped": True})
+            domain = data.get("domain") or None
+            if domain is not None and not isinstance(domain, str):
+                return self._send({"error": "domain must be text"}, status=400)
+            return self._send({"stopped": bool(self.service.stop(domain))})
 
         if path == "/api/settings":
             try:
@@ -213,7 +261,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send({"error": str(error)}, status=400)
 
         if path == "/api/maintenance/clear-cache":
-            return self._send(self.service.clear_cache())
+            result = self.service.clear_cache()
+            if result is None:
+                return self._send({"error": "a scan is running; clear the cache when it has finished"}, status=409)
+            return self._send(result)
 
         if path == "/api/maintenance/compact":
             result = self.service.compact_database()
@@ -225,7 +276,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._send({"opened": self.service.open_exports()})
 
         if path == "/api/export":
-            return self._send(self.service.export_all())
+            filters = data.get("filters")
+            try:
+                return self._send(self.service.export_session(filters if isinstance(filters, dict) else None))
+            except ValueError as error:
+                return self._send({"error": str(error)}, status=400)
 
         if path == "/api/quit":
             self._send({"quitting": True})
@@ -233,6 +288,13 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         return self._send({"error": "not found"}, status=404)
+
+    @staticmethod
+    def _urls(data):
+        urls = data.get("urls") or []
+        if not isinstance(urls, list) or len(urls) > 200:
+            raise ValueError("urls must be a list of at most 200 addresses")
+        return [str(u).strip() for u in urls if str(u).strip()]
 
     # ---------- helpers ----------
     def _index(self):

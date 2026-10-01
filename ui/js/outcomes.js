@@ -18,13 +18,16 @@ const OUTCOME_UI = {
     error:           { glyph: '×', tone: 'bad' },
 };
 const STATE_UI = {
-    scanning: { glyph: '◐', tone: 'accent' }, queued: { glyph: '○', tone: 'dim' }, done: { glyph: '●', tone: 'good' },
+    scanning: { glyph: '◐', tone: 'accent' }, waiting: { glyph: '○', tone: 'dim' }, ready: { glyph: '○', tone: 'dim' }, done: { glyph: '●', tone: 'good' },
     failed: { glyph: '×', tone: 'bad' }, stopped: { glyph: '■', tone: 'caution' },
 };
 const FINISHED = ['done', 'failed', 'stopped'];
 
+/** "Waiting — 2 ahead" */
+export const waitingText = company => `Waiting — ${company.waiting_ahead ?? 0} ahead`;
+
 export const isFinished = company => FINISHED.includes(company.state);
-export const glyphOf = company => (isFinished(company) && OUTCOME_UI[company.outcome]) || STATE_UI[company.state] || STATE_UI.queued;
+export const glyphOf = company => (isFinished(company) && OUTCOME_UI[company.outcome]) || STATE_UI[company.state] || STATE_UI.ready;
 
 /** Finished, and nothing to show for it: these are the companies the All pane lists below its table. */
 export const emptyCompanies = () => state.companies.filter(c => isFinished(c) && !(c.jobs_count > 0));
@@ -51,9 +54,12 @@ export function companyEmptyHTML(company) {
                <span class="dim" aria-hidden="true">·</span> <span class="clock" data-elapsed="${esc(company.started_at || '')}">${fmtClock(company.started_at ? Date.now() / 1000 - company.started_at : 0)}</span></p>
             <p class="dim">Postings appear here as they are found.</p></div>`;
     }
-    if (company.state === 'queued') {
-        return `<div class="empty"><div class="headline">${state.running ? 'Waiting to scan' : 'Not scanned yet'}</div>
-            <p>${state.running ? 'This company starts when a scan slot is free.' : 'Press Start to scan it.'}</p></div>`;
+    if (company.state === 'waiting') {
+        return `<div class="empty"><div class="headline">Waiting for a free slot</div>
+            <p>${waitingText(company)}. It starts by itself when one scan finishes.</p></div>`;
+    }
+    if (company.state === 'ready') {
+        return `<div class="empty"><div class="headline">Ready to scan</div><p>Press Start to scan the companies in the list.</p></div>`;
     }
     if (!company.outcome_detail) {                               // a scan from before outcomes were recorded
         return `<div class="empty"><div class="headline">No postings yet</div><p>This company's scan found no postings.</p></div>`;

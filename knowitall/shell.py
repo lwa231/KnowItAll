@@ -5,6 +5,8 @@ import os
 import sys
 from pathlib import Path
 
+from . import paths
+
 DEFAULT_SIZE = (1440, 900)
 MIN_SIZE = (1000, 680)
 
@@ -108,3 +110,26 @@ def webview_backend():
     """Force WebView2 on Windows: pywebview would otherwise fall back to the old IE engine and
     render the UI badly, and we would rather fail with a clear message."""
     return "edgechromium" if sys.platform == "win32" else None
+
+
+APP_USER_MODEL_ID = "KnowItAll.Desktop"
+ICON_FILES = {"win32": "knowitall.ico", "darwin": "icon-macos-1024.png"}      # anything else: icon-256.png
+
+
+def icon_path(platform=None):
+    """The app icon for this platform, from the bundled assets: .ico on Windows, the macOS-shaped PNG on macOS, a 256px PNG elsewhere."""
+    platform = platform or sys.platform
+    return paths.asset_dir() / "knowitall" / "assets" / "icons" / ICON_FILES.get(platform, "icon-256.png")
+
+
+def set_app_user_model_id(platform=None, ctypes_module=None):
+    """Windows only: give the process its own identity so the taskbar shows KnowItAll, not Python. Returns True if it was set."""
+    if (platform or sys.platform) != "win32":
+        return False
+    try:
+        if ctypes_module is None:
+            import ctypes as ctypes_module
+        ctypes_module.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_USER_MODEL_ID)
+        return True
+    except Exception:
+        return False

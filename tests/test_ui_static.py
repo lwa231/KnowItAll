@@ -41,7 +41,7 @@ def test_ids_that_scripts_look_up_exist_in_the_page(path):
 
 def test_every_view_has_a_section_and_a_nav_button():
     sections = set(re.findall(r'<section class="view[^"]*" data-view="([a-z]+)"', HTML))
-    buttons = set(re.findall(r'<button class="nav-item"[^>]*data-view="([a-z]+)"', HTML))
+    buttons = set(re.findall(r'<button class="rail-item"[^>]*data-view="([a-z]+)"', HTML))
     assert sections == buttons and {"scraper", "history", "output", "settings", "system"} <= sections
 
 
@@ -103,3 +103,31 @@ def test_no_font_size_below_12px_in_the_stylesheets():
     for sheet in (UI / "css").glob("*.css"):
         for match in re.finditer(r"font-size:\s*(\d+(?:\.\d+)?)px", sheet.read_text(encoding="utf-8")):
             assert float(match.group(1)) >= 12, f"{sheet.name}: font-size {match.group(0)}"
+
+
+def test_the_rail_has_a_named_button_and_a_tooltip_for_every_item():
+    rail = re.search(r'<aside class="rail".*?</aside>', HTML, re.S).group(0)
+    buttons = re.findall(r'<button class="rail-item"[^>]*>.*?</button>', rail, re.S)
+    assert len(buttons) == 7                                    # scraper, queue, history, output, settings, system, quit
+    for button in buttons:
+        assert re.search(r'aria-label="[^"]+"', button), button[:80]
+        assert 'class="tip" aria-hidden="true"' in button, button[:80]
+    assert 'id="quitBtn"' in rail and 'aria-controls="queuePanel"' in rail
+
+
+def test_the_old_sidebar_is_gone():
+    assert 'class="sidebar"' not in HTML and "logo-slot" not in HTML and "Job Listing Scraper" not in HTML
+    css = "".join(p.read_text(encoding="utf-8") for p in (UI / "css").glob("*.css"))
+    for name in (".sidebar", ".brand", ".nav-item", ".side-foot", ".side-section", ".logo-slot"):
+        assert name not in css, f"{name} is still styled"
+
+
+def test_settings_panels_and_sliders_have_their_ids():
+    for id_ in ("settings-scanning", "settings-appearance", "settings-output", "setLimit", "setMaxJobs", "setDepth"):
+        assert f'id="{id_}"' in HTML
+    for gone in ("hdrMaxJobs", "hdrDepth", "freshSwitch"):
+        assert gone not in HTML
+
+
+def test_logo_sources_are_copied_into_the_ui():
+    assert (UI / "img" / "logo-kia.svg").is_file() and (UI / "img" / "icon-glyph.svg").is_file()

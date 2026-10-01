@@ -57,7 +57,7 @@ def make_v1_database(path):
 
 def test_fresh_database_reaches_the_latest_version(path):
     store.init()
-    assert store.schema_version() == max(v for v, _ in store.MIGRATIONS) == 3
+    assert store.schema_version() == max(v for v, _ in store.MIGRATIONS) == 4
     names = tables(path)
     assert {"runs", "postings", "run_postings", "schema_version", "postings_fts"} <= names
     assert not {"jobs", "seen", "jobs_fts"} & names
@@ -69,13 +69,13 @@ def test_init_is_idempotent(path):
     store.init()
     store.init()
     versions = [r[0] for r in store.connect().execute("SELECT version FROM schema_version ORDER BY version")]
-    assert versions == [1, 2, 3]
+    assert versions == [1, 2, 3, 4]
 
 
 def test_legacy_v1_database_becomes_postings_without_losing_anything(path):
     make_v1_database(path)
     store.init()
-    assert store.schema_version() == 3
+    assert store.schema_version() == 4
     conn = store.connect()
 
     postings = {r["url_key"]: r for r in conn.execute("SELECT * FROM postings")}
@@ -139,7 +139,7 @@ def test_v2_database_upgrades_and_backs_up_as_v2(path, monkeypatch):
     monkeypatch.undo()
     monkeypatch.setattr(store, "DB_PATH", path)
     store.init()
-    assert store.schema_version() == 3
+    assert store.schema_version() == 4
     assert "jobs_fts" not in tables(path) and "postings_fts" in tables(path)
     assert path.with_name(path.name + ".v2.bak").exists()
     assert store.query_jobs({"q": "austin"})["total"] == 1
@@ -162,7 +162,7 @@ def test_failed_v3_migration_rolls_back_completely_but_keeps_the_backup(path, mo
     assert path.with_name(path.name + ".v1.bak").exists() or path.with_name(path.name + ".v2.bak").exists()
     monkeypatch.setattr(store, "MIGRATIONS", store.MIGRATIONS[:2] + [(3, store._migrate_v3)])
     store.init()                                                              # and it upgrades fine afterwards
-    assert store.schema_version() == 3
+    assert store.schema_version() == 3                                        # (this test's migration list stops at 3)
 
 
 def test_legacy_v1_rollback_leaves_the_original_tables_intact(path, monkeypatch):
@@ -199,7 +199,7 @@ def test_without_fts5_the_migration_still_completes_and_search_falls_back(path, 
     make_v1_database(path)
     monkeypatch.setattr(store, "connect", lambda: NoFts(real_connect()))
     store.init()
-    assert store.schema_version(real_connect()) == 3
+    assert store.schema_version(real_connect()) == 4
     assert not store.fts_enabled(real_connect())
     monkeypatch.setattr(store, "connect", real_connect)
     assert store.query_jobs({"q": "austin"})["total"] == 1                     # LIKE fallback works on migrated data

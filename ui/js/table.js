@@ -3,6 +3,7 @@ import { state, byDomain } from './state.js';
 import { filters, isFiltering } from './filters.js';
 import { SERVER_SORT } from './jobs.js';
 import { companyEmptyHTML, noListingsHTML } from './outcomes.js';
+import { counts } from './counts.js';
 import { esc, relTime, fmtNum, safeHref } from './util.js';
 
 const WORK = { remote: 'Remote', hybrid: 'Hybrid', onsite: 'On-site' };
@@ -78,6 +79,14 @@ export function skeletonHTML(key) {
 
 /** The list's footer sits after the table, not inside it: a colspan row would add phantom columns whenever
  *  some columns are hidden on a narrow pane. */
+const HINT_NOUN = { workplace: 'workplace', employment_type: 'employment type', country: 'location' };
+/** "+38 postings don't state workplace — show them": what a filter is hiding only because the field is not stated. */
+export function hintsHTML() {
+    return Object.entries(counts.hidden || {}).map(([key, n]) =>
+        `<button type="button" class="hint-link" data-show-unknown="${esc(key)}">+${fmtNum(n)} ${n === 1 ? 'posting doesn\'t' : 'postings don\'t'} state ${HINT_NOUN[key]} — show ${n === 1 ? 'it' : 'them'}</button>`).join('');
+}
+const hintSlot = pane => pane.key === state.activeTab ? `<div class="hint-slot" data-hint-slot>${hintsHTML()}</div>` : '';
+
 export function footerHTML(pane) {
     let inner;
     if (pane.loadingMore) inner = 'Loading more…';
@@ -98,6 +107,12 @@ function emptyHTML(pane) {
     if (pane.error) {
         return `<div class="empty" role="alert"><div class="headline">Could not load postings</div><p>${esc(pane.error)}</p>
                 <button type="button" class="btn" data-retry="${esc(pane.key)}">Try again</button></div>`;
+    }
+    const scanningCompany = pane.key === 'ALL' ? state.companies.some(c => c.state === 'scanning') : byDomain(pane.key)?.state === 'scanning' && !state.runView[pane.key];
+    if (isFiltering() && scanningCompany && status === 'current') {          // nothing matches yet, and more is still coming in
+        const checked = pane.key === 'ALL' ? state.companies.reduce((n, c) => n + (c.jobs_count || 0), 0) : byDomain(pane.key).jobs_count || 0;
+        return `<div class="empty"><div class="headline">Scanning…</div><p>0 matches so far (${fmtNum(checked)} ${checked === 1 ? 'posting' : 'postings'} checked).</p>
+                <button type="button" class="btn" data-clear-filters>Clear filters</button></div>`;
     }
     if (isFiltering() && foundAnything(pane)) {
         return `<div class="empty"><div class="headline">No postings match these filters</div>
@@ -125,7 +140,7 @@ function allEmptyHTML() {
     if (!state.companies.length) {
         return `<div class="empty"><div class="headline">Nothing scanned yet</div><p>Enter a company web address above and press Start.</p></div>`;
     }
-    const working = state.companies.filter(c => c.state === 'scanning' || c.state === 'queued').length;
+    const working = state.companies.filter(c => c.state === 'scanning' || c.state === 'waiting').length;
     const headline = working ? 'Scanning…' : 'No postings found';
     const text = working ? 'Postings appear here as they are found.'
         : state.companies.length === 1 ? 'The company you scanned returned no postings.' : `None of the ${state.companies.length} companies returned postings.`;
@@ -139,5 +154,5 @@ export function bodyHTML(pane) {
     if (pane.error && !pane.rows.length) return emptyHTML(pane);
     if (!pane.rows.length) return pane.loadedOnce ? emptyHTML(pane) : skeletonHTML(pane.key);
     const table = `<table class="data-table">${headHTML(pane)}<tbody>${pane.rows.map(job => rowHTML(job, pane.key)).join('')}</tbody></table>${footerHTML(pane)}`;
-    return pane.key === 'ALL' ? table + noListingsHTML() : table;
+    return (pane.key === 'ALL' ? table + hintSlot(pane) + noListingsHTML() : table + hintSlot(pane));
 }

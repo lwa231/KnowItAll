@@ -6,8 +6,9 @@
 // has nothing ("blocked", "no careers page", "3 min limit").
 import * as api from './api.js';
 import { state, byDomain, totalJobs, on } from './state.js';
+import { matchesOf } from './counts.js';
 import { showCompany } from './workspace.js';
-import { glyphOf, isFinished } from './outcomes.js';
+import { glyphOf, isFinished, waitingText } from './outcomes.js';
 import { $, esc, fmtNum, svgIcon } from './util.js';
 
 const rows = new Map();                                   // domain -> its <li>
@@ -31,9 +32,16 @@ function build(domain) {
 /** The short second line and its tone, or null when the row needs none. */
 function reasonOf(company) {
     if (company.state === 'scanning') return { text: company.phase || 'Working…', tone: 'dim' };
-    if (company.state === 'queued') return state.running ? { text: 'waiting', tone: 'dim' } : null;
+    if (company.state === 'waiting') return { text: waitingText(company), tone: 'dim' };
+    if (company.state === 'ready') return { text: 'ready', tone: 'dim' };
     if (!isFinished(company)) return null;
     return company.outcome_short ? { text: company.outcome_short, tone: glyphOf(company).tone } : null;
+}
+
+/** The postings count: "12 / 340" (matching / found) while filters are on, plain "340" otherwise. */
+function countText(company) {
+    const matches = matchesOf(company.domain);
+    return matches === null ? fmtNum(company.jobs_count) : `${fmtNum(matches)} / ${fmtNum(company.jobs_count)}`;
 }
 
 function paint(li, company) {
@@ -48,7 +56,7 @@ function paint(li, company) {
     goneEl.hidden = !gone;
     if (gone) { setText(goneEl, `−${gone}`); goneEl.title = `${gone} no longer listed`; }
 
-    const count = company.state === 'queued' ? 'queued' : company.state === 'scanning' ? `… ${fmtNum(company.jobs_count)}` : fmtNum(company.jobs_count);
+    const count = company.state === 'ready' ? 'ready' : company.state === 'waiting' ? 'waiting' : company.state === 'scanning' ? `… ${countText(company)}` : countText(company);
     setText(li.querySelector('[data-count]'), count);
 
     const reason = reasonOf(company);
@@ -63,9 +71,10 @@ function paint(li, company) {
     li.querySelector('.queue-main').classList.toggle('has-reason', !!reason);
 
     // One complete phrase for screen readers, instead of the glyph and numbers read separately.
-    setText(li.querySelector('[data-sr]'), `, ${company.state}, ${count} postings${reason ? `, ${reason.text}` : ''}`);
+    const counted = company.state === 'ready' || company.state === 'waiting' ? '' : `, ${count} postings`;
+    setText(li.querySelector('[data-sr]'), `, ${company.state}${counted}${reason ? `, ${reason.text}` : ''}`);
 
-    const busy = company.state === 'scanning' || (company.state === 'queued' && state.running);
+    const busy = company.state === 'scanning' || company.state === 'waiting';
     li.querySelector('[data-stop]').hidden = !busy;
     li.classList.toggle('selected', state.activeTab === company.domain);
 }
@@ -99,10 +108,12 @@ export function initQueue() {
         if (stop) { await api.post('/api/stop', { domain: stop.dataset.stop }).catch(() => {}); return; }
         const open = event.target.closest('[data-open]');
         if (open && byDomain(open.dataset.open)) {
-            document.querySelector('.nav-item[data-view="scraper"]').click();
+            document.querySelector('.rail-item[data-view="scraper"]').click();
             showCompany(open.dataset.open);
             renderQueue();
         }
     });
-    on('active-tab', renderQueue);                        // the selected row follows the tab, whoever changed it
+    on('active-tab', renderQueue);
+    on('counts', renderQueue);
+    on('filters', renderQueue);                        // the selected row follows the tab, whoever changed it
 }

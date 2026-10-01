@@ -5,10 +5,12 @@
 // occupancy alone (100% for one, halves for two, quarters for three or four); anything dropped away from a
 // quadrant floats. New in this version: everything that can be dragged can also be moved from a menu.
 import { state, on, emit, byDomain, totalJobs } from './state.js';
-import { filters, isFiltering } from './filters.js';
+import { filters, isFiltering, toggleValue, clearFilters } from './filters.js';
+import { counts, newMatchesOf } from './counts.js';
 import { paneData, forgetPaneData, allPaneData } from './jobs.js';
 import { bodyHTML, footerHTML, rowHTML } from './table.js';
 import { paintPhases, tickClocks } from './outcomes.js';
+import { hintsHTML } from './table.js';
 import { openPopover, closePopover } from './popover.js';
 import { $, $$, esc, clamp, debounce, fmtNum, svgIcon } from './util.js';
 
@@ -87,7 +89,7 @@ function headStat(id) {
 
 function headExtra(id) {
     const c = byDomain(targetOf(id));
-    if (c) return `${c.source || c.outcome_short || '—'} · ${c.new_count || 0} new`;
+    if (c) return `${c.source || c.outcome_short || '—'} · ${newMatchesOf(c)} new`;
     return targetOf(id) === 'ALL' && state.companies.length ? `${state.companies.length} in the queue` : '';
 }
 
@@ -485,6 +487,16 @@ export function openCompany(domain, { runId = null } = {}) {
     renderTabs();
     renderAll();
     if (!wasActive) emit('active-tab', domain);
+    if (runId) emit('run-view', domain);
+}
+
+/** Leave an older scan and look at the company's latest one again ("Back to latest", and its breadcrumb). */
+export function showLatest(domain) {
+    delete state.runView[domain];
+    forgetPaneData(domain);
+    renderAll();
+    emit('active-tab', state.activeTab);
+    emit('run-view', domain);
 }
 
 /* ------------------------------------------------------------------ data refresh */
@@ -504,6 +516,7 @@ export function onServerState(s, previous) {
     for (const ev of (s.events || [])) {
         if (ev.kind === 'reset') {
             delete state.runView[ev.domain];                      // a fresh scan: back to looking at the latest
+            emit('run-view', ev.domain);
             forgetPaneData(ev.domain);
             structural = true;
         } else if (ev.kind === 'jobs') {
@@ -514,7 +527,7 @@ export function onServerState(s, previous) {
         if (!isPlaced(c.domain) && totalViews() < MAX_VIEWS) { openTabs.push(c.domain); structural = true; }
     });
     // What a pane shows depends on how each company's scan ended, so a new outcome or careers link repaints the panes.
-    const key = c => `${c.domain}:${c.state}:${c.source}:${c.outcome}:${c.careers_url}:${c.careers_note}`;
+    const key = c => `${c.domain}:${c.state}:${c.source}:${c.outcome}:${c.careers_url}:${c.careers_note}:${c.waiting_ahead}`;
     if (previous.map(key).join('|') !== state.companies.map(key).join('|')) structural = true;
     renderTabs();
     if (structural) { renderDock(); renderFloats(); }
@@ -579,15 +592,17 @@ function initDelegates() {
         if (more) { paneData(more.dataset.loadMore).loadMore(); return; }
         const retry = e.target.closest('[data-retry]');
         if (retry) { paneData(retry.dataset.retry).refresh(); return; }
-        if (e.target.closest('[data-clear-filters]')) { $('#clearFilters').click(); return; }
+        if (e.target.closest('[data-clear-filters]')) { clearFilters(); $('#searchInput').value = ''; return; }
+        const unknown = e.target.closest('[data-show-unknown]');
+        if (unknown) { toggleValue(unknown.dataset.showUnknown, 'unknown'); return; }
         const openCompany = e.target.closest('[data-open-company]');
         if (openCompany) {
-            document.querySelector('.nav-item[data-view="scraper"]').click();
+            document.querySelector('.rail-item[data-view="scraper"]').click();
             showCompany(openCompany.dataset.openCompany);
             return;
         }
         const latest = e.target.closest('[data-latest]');
-        if (latest) { delete state.runView[latest.dataset.latest]; forgetPaneData(latest.dataset.latest); renderAll(); emit('active-tab', state.activeTab); }
+        if (latest) showLatest(latest.dataset.latest);
     });
 }
 
@@ -614,6 +629,8 @@ function initDataEvents() {
         updateHeads();
     });
     on('filters', () => { refreshVisible(); });
+    on('hints', () => $$('[data-hint-slot]').forEach(slot => { slot.innerHTML = hintsHTML(); }));
+    on('counts', updateHeads);
     on('layout', () => {});
 }
 

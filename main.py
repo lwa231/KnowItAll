@@ -22,10 +22,14 @@ def parse_args(argv=None):
     parser.add_argument("--no-browser", action="store_true", help="never fall back to Chrome")
     parser.add_argument("--browser-workers", type=int, default=None, choices=(1, 2, 3),
                         help="Chrome instances that may render pages at once (default: the saved setting)")
-    parser.add_argument("--max-jobs", type=int, default=2000, help="cap per company for very large boards (default 2000)")
-    parser.add_argument("--max-enrich", type=int, default=50,
-                        help="job pages to open for details in the generic fallback (default 50)")
-    parser.add_argument("--parallel", type=int, default=1, help="companies to scrape at the same time (default 1)")
+    parser.add_argument("--max-jobs", type=int, default=None,
+                        help="cap per company for very large boards (default: the saved setting, 2000)")
+    parser.add_argument("--max-enrich", type=int, default=None,
+                        help="job pages to open for details in the generic fallback (default: the saved setting, 50)")
+    parser.add_argument("--parallel", type=int, default=None, choices=(1, 2, 3),
+                        help="companies to scrape at the same time (default: the saved setting)")
+    parser.add_argument("--time-limit", type=int, default=None, choices=(1, 3, 5), metavar="MINUTES",
+                        help="minutes one company may take: 1, 3 or 5 (default: the saved setting)")
     parser.add_argument("--show", type=int, default=10, help="jobs to print per company (default 10)")
     parser.add_argument("--no-history", action="store_true",
                         help="do not record this scan in history.db (so nothing is marked 'new' either)")
@@ -83,11 +87,19 @@ def main(argv=None):
     if pool and args.browser_workers:
         pool.resize(args.browser_workers)
     if not args.no_history:
+        try:
+            service.auto_backup()                      # before the database is opened (and possibly migrated)
+        except Exception as error:
+            log(f"automatic backup failed: {type(error).__name__}: {error}")
         store.init()
+        service.begin_session()
         service.prune_in_background()
 
-    options = {"fresh": args.no_cache, "max_jobs": args.max_jobs, "max_enrich": args.max_enrich,
-               "concurrency": args.parallel, "history": not args.no_history, "autosave": not args.no_export}
+    saved = service.get_settings()                 # the window's settings are shared: flags override them, never the reverse
+    options = {"fresh": args.no_cache, "cache_reuse": saved["cache_reuse"], "max_jobs": args.max_jobs or saved["max_jobs"],
+               "max_enrich": args.max_enrich if args.max_enrich is not None else saved["max_enrich"],
+               "concurrency": args.parallel or saved["concurrency"], "time_limit_min": args.time_limit or saved["time_limit_min"],
+               "history": not args.no_history, "autosave": saved["autosave"] and not args.no_export}
     try:
         if not service.start(args.urls, options):
             print("nothing to scan: none of those look like web addresses", file=sys.stderr)
@@ -100,6 +112,7 @@ def main(argv=None):
     finally:
         if pool:
             pool.close()
+        service.end_session()
 
     print_summary(service, args.show)
     return 0 if any(service.jobs_of(c["domain"]) for c in service.state()["companies"]) else 1

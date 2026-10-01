@@ -10,6 +10,8 @@ export const state = {
     settings: null,          // loaded from /api/settings
     runView: {},             // domain -> run id being looked at instead of the latest scan
     activeView: 'scraper',
+    openedFrom: null,        // 'history' while a scan that was opened from the History view is showing (for the breadcrumbs)
+    settingsSection: null,   // which Settings panel a link pointed at ('scanning', 'appearance', 'output') or null
     activeTab: 'ALL',        // which company the main pane shows: 'ALL' or a domain
 };
 

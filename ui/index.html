@@ -28,49 +28,53 @@
         <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
         <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></symbol>
         <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01"/></symbol>
+        <!-- Heroicons v1 outline (MIT), the set HyperUI's examples use: rail, breadcrumbs -->
+        <symbol id="h-home" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></symbol>
+        <symbol id="h-list" viewBox="0 0 24 24"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></symbol>
+        <symbol id="h-clock" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></symbol>
+        <symbol id="h-download" viewBox="0 0 24 24"><path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></symbol>
+        <symbol id="h-cog" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></symbol>
+        <symbol id="h-chip" viewBox="0 0 24 24"><path d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></symbol>
+        <symbol id="h-logout" viewBox="0 0 24 24"><path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></symbol>
+        <symbol id="h-chevron" viewBox="0 0 20 20"><path fill="currentColor" stroke="none" fill-rule="evenodd" clip-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"/></symbol>
     </svg>
 
-    <div class="app">
+    <div class="app" id="app" data-queue="on">
 
-        <!-- ================= sidebar ================= -->
-        <aside class="sidebar">
-            <div class="brand">
-                <div class="brand-row">
-                    <div class="logo-slot" aria-hidden="true">LOGO</div>
-                    <div>
-                        <div class="brand-name">KnowItAll</div>
-                        <div class="label brand-sub">Job Listing Scraper</div>
-                    </div>
-                </div>
-                <div>
-                    <div class="label">Session</div>
-                    <div class="session-line" id="sessionLine">0 companies · 0 jobs</div>
-                </div>
+        <!-- ================= rail (HyperUI "Side Menu", dark) ================= -->
+        <aside class="rail" aria-label="Main">
+            <div>
+                <div class="rail-logo"><span role="img" aria-label="KnowItAll"><svg viewBox="16 8 96 120" aria-hidden="true" focusable="false"><path fill="currentColor" shape-rendering="crispEdges" d="M40 8 L88 8 L88 56 L64 56 L64 80 L88 80 L88 104 L112 104 L112 128 L40 128 L40 104 L16 104 L16 80 L40 80 Z"/></svg></span></div>
+                <ul>
+                    <li><button class="rail-item" type="button" data-view="scraper" aria-label="Scraper" aria-current="page"><svg aria-hidden="true"><use href="#h-home"/></svg><span class="tip" aria-hidden="true">Scraper</span></button></li>
+                    <li><button class="rail-item" type="button" id="queueToggle" aria-label="Queue" aria-pressed="true" aria-controls="queuePanel"><svg aria-hidden="true"><use href="#h-list"/></svg><span class="tip" aria-hidden="true">Queue</span></button></li>
+                    <li><button class="rail-item" type="button" data-view="history" aria-label="History"><svg aria-hidden="true"><use href="#h-clock"/></svg><span class="tip" aria-hidden="true">History</span></button></li>
+                </ul>
+                <ul>
+                    <li><button class="rail-item" type="button" data-view="output" aria-label="Output"><svg aria-hidden="true"><use href="#h-download"/></svg><span class="tip" aria-hidden="true">Output</span></button></li>
+                    <li><button class="rail-item" type="button" data-view="settings" aria-label="Settings"><svg aria-hidden="true"><use href="#h-cog"/></svg><span class="tip" aria-hidden="true">Settings</span></button></li>
+                    <li><button class="rail-item" type="button" data-view="system" aria-label="System"><svg aria-hidden="true"><use href="#h-chip"/></svg><span class="tip" aria-hidden="true">System</span></button></li>
+                </ul>
             </div>
-
-            <nav class="side-section" aria-label="Views">
-                <div class="side-title"><span class="label">Views</span></div>
-                <button class="nav-item" type="button" data-view="scraper" aria-current="page"><span class="idx" aria-hidden="true">[01]</span>Scraper</button>
-                <button class="nav-item" type="button" data-view="history"><span class="idx" aria-hidden="true">[02]</span>History</button>
-            </nav>
-
-            <section class="side-section queue" aria-labelledby="queueTitle">
-                <div class="side-title">
-                    <h2 class="label" id="queueTitle">Queue</h2>
-                    <span class="label" id="queueCount">0/0</span>
-                </div>
-                <ul class="queue-list" id="queueList"></ul>
-            </section>
-
-            <nav class="side-section" aria-label="System">
-                <div class="side-title"><span class="label">System</span></div>
-                <button class="nav-item" type="button" data-view="output"><span class="idx" aria-hidden="true">[out]</span>Output</button>
-                <button class="nav-item" type="button" data-view="settings"><span class="idx" aria-hidden="true">[cfg]</span>Settings</button>
-                <button class="nav-item" type="button" data-view="system"><span class="idx" aria-hidden="true">[sys]</span>System</button>
-            </nav>
-
-            <div class="side-foot"><button class="quit" id="quitBtn" type="button">[quit]</button></div>
+            <div class="rail-foot"><button class="rail-item" type="button" id="quitBtn" aria-label="Quit KnowItAll"><svg aria-hidden="true"><use href="#h-logout"/></svg><span class="tip" aria-hidden="true">Quit</span></button></div>
         </aside>
+
+        <!-- ================= queue panel ================= -->
+        <section class="queue-panel" id="queuePanel" aria-labelledby="queueTitle">
+            <div class="queue-head">
+                <h2 class="label" id="queueTitle">Queue</h2>
+                <span class="label" id="queueCount">0/0</span>
+            </div>
+            <div class="session-line" id="sessionLine">0 companies · 0 jobs</div>
+            <ul class="queue-list" id="queueList"></ul>
+        </section>
+
+        <!-- ================= top bar: KiA wordmark + breadcrumbs (HyperUI "Base with home icon", dark) ================= -->
+        <div class="topbar">
+            <span class="wordmark" role="img" aria-label="KnowItAll"><svg viewBox="119 478 1017 294" aria-hidden="true" focusable="false"><path fill="currentColor" fill-rule="evenodd" shape-rendering="crispEdges" d="M179 478 L298 478 L298 597 L238 597 L238 651 L298 651 L298 715 L359 715 L359 772 L179 772 L179 715 L119 715 L119 651 L179 651 Z M461 478 L537 478 L537 568 L562 568 L562 546 L585 546 L585 524 L606 524 L606 500 L628 500 L628 478 L718 478 L718 524 L696 524 L696 546 L674 546 L674 568 L653 568 L653 597 L620 597 L620 638 L628 638 L628 651 L653 651 L653 677 L674 677 L674 698 L696 698 L696 715 L718 715 L718 772 L641 772 L641 750 L620 750 L620 737 L606 737 L606 715 L585 715 L585 698 L562 698 L562 677 L537 677 L537 772 L461 772 Z M765 478 L842 478 L842 546 L765 546 Z M968 478 L1061 478 L1061 514 L1083 514 L1083 524 L1092 524 L1092 559 L1114 559 L1114 597 L1136 597 L1136 772 L1061 772 L1061 715 L968 715 L968 772 L892 772 L892 597 L915 597 L915 559 L938 559 L938 524 L945 524 L945 514 L968 514 Z M765 568 L842 568 L842 772 L765 772 Z M991 583 L991 622 L968 622 L968 651 L1061 651 L1061 622 L1038 622 L1038 583 Z"/></svg></span>
+            <span class="topbar-divider" aria-hidden="true"></span>
+            <nav aria-label="Breadcrumb"><ol class="crumbs" id="crumbList"></ol></nav>
+        </div>
 
         <!-- ================= header: run controls + global filter bar ================= -->
         <header class="header">
@@ -85,24 +89,21 @@
                     <form class="controls-row first" id="runForm" autocomplete="off">
                         <label class="sr-only" for="addressInput">Company web addresses, separated by spaces or commas</label>
                         <input class="input" type="text" id="addressInput" spellcheck="false" placeholder="company web address, e.g. stripe.com">
-                        <button class="btn" type="button" id="addBtn">+ Queue</button>
-                        <button class="btn btn-primary btn-lg" type="submit" id="runBtn">Start</button>
+                        <div class="field" title="How many companies scan at the same time">
+                            <span class="label" id="atOnceLabel">At once</span>
+                            <div class="segmented" role="radiogroup" aria-labelledby="atOnceLabel" id="atOnceSeg">
+                                <button type="button" role="radio" aria-checked="false" data-at-once="1">1</button>
+                                <button type="button" role="radio" aria-checked="false" data-at-once="2">2</button>
+                                <button type="button" role="radio" aria-checked="true" data-at-once="3">3</button>
+                            </div>
+                        </div>
+                        <button class="btn btn-primary btn-lg" type="submit" id="runBtn">Scan</button>
+                        <button class="btn btn-lg" type="button" id="startBtn" hidden>Start</button>
+                        <button class="btn btn-stop btn-lg" type="button" id="stopBtn" hidden>Stop</button>
                     </form>
 
                     <div class="controls-row">
-                        <div class="field">
-                            <span class="label" id="freshLabel">Fresh data</span>
-                            <button class="switch" type="button" role="switch" id="freshSwitch" aria-checked="false" aria-labelledby="freshLabel"></button>
-                        </div>
-                        <div class="field">
-                            <label class="label" for="hdrMaxJobs">Max jobs</label>
-                            <input class="input" type="number" id="hdrMaxJobs" min="1" max="100000" inputmode="numeric">
-                        </div>
-                        <div class="field">
-                            <label class="label" for="hdrDepth">Detail depth</label>
-                            <input class="input" type="number" id="hdrDepth" min="0" max="500" inputmode="numeric" style="width:72px">
-                        </div>
-                        <div class="metric"><span class="label">Jobs found</span><span class="metric-value" id="jobsFound">0</span></div>
+                        <div class="metric"><span class="label" id="jobsFoundLabel">Jobs found</span><span class="metric-value"><span id="jobsFound">0</span><span class="metric-sub" id="jobsTotal" hidden></span></span></div>
                         <div class="metric"><span class="label">Elapsed</span><span class="metric-value" id="elapsed">00:00</span></div>
                         <div class="progress">
                             <span class="label" id="progressLabel">Progress</span>
@@ -129,9 +130,13 @@
                     </div>
                     <span class="result-summary" id="resultSummary" role="status" aria-live="polite"></span>
                     <span class="filter-spacer"></span>
-                    <button class="btn btn-quiet" type="button" id="clearFilters" hidden>Clear filters</button>
                 </div>
                 <div class="chips" id="filterChips" aria-label="Filters"></div>
+                <div class="filter-banner" id="filterBanner" role="status" hidden>
+                    <span class="truncate" id="filterBannerText"></span>
+                    <button class="btn btn-quiet" type="button" id="bannerEdit">Edit</button>
+                    <button class="btn btn-quiet" type="button" id="bannerClear">Clear</button>
+                </div>
             </div>
         </header>
 
@@ -164,14 +169,19 @@
                     <div class="view-scroll">
                         <h1 class="sr-only" id="h-history">History</h1>
                         <table class="plain-table">
-                            <caption class="sr-only">Previous scans. Choose a company to see what that scan found.</caption>
+                            <caption class="sr-only">This session's scans. Choose a company to see what that scan found.</caption>
                             <thead><tr>
-                                <th scope="col" style="width:28%">Company</th><th scope="col" style="width:18%">Source</th>
-                                <th scope="col" style="width:12%">Jobs</th><th scope="col" style="width:12%">New</th>
-                                <th scope="col" style="width:12%">Status</th><th scope="col" class="right" style="width:18%">Scanned</th>
+                                <th scope="col" style="width:24%">Company</th><th scope="col" style="width:14%">Source</th>
+                                <th scope="col" style="width:9%">Jobs</th><th scope="col" style="width:10%" id="matchesHead" hidden>Matches</th>
+                                <th scope="col" style="width:8%">New</th><th scope="col" style="width:22%">How it ended</th>
+                                <th scope="col" class="right" style="width:13%">Scanned</th>
                             </tr></thead>
                             <tbody id="historyBody"></tbody>
                         </table>
+                        <div class="view-note" id="historyNote">
+                            <p><strong>New history features coming soon.</strong></p>
+                            <p>Earlier sessions are saved in backups (Settings → Data &amp; storage).</p>
+                        </div>
                     </div>
                 </section>
 
@@ -180,58 +190,110 @@
                         <h1 class="sr-only" id="h-output">Output</h1>
                         <div class="toolbar">
                             <button class="btn" type="button" id="openFolderBtn">Open folder</button>
-                            <button class="btn" type="button" id="exportAllBtn">Export whole queue</button>
+                            <button class="btn btn-primary" type="button" id="exportAllBtn">Export this session</button>
+                            <span class="hint" id="exportScopeHint"></span>
                         </div>
                         <table class="plain-table">
-                            <caption class="sr-only">Files written to the exports folder</caption>
+                            <caption class="sr-only">Files written to the exports folder, this session's first</caption>
                             <thead><tr>
                                 <th scope="col" style="width:46%">File</th><th scope="col" style="width:18%">Rows</th>
                                 <th scope="col" style="width:18%">Size</th><th scope="col" class="right" style="width:18%">Written</th>
                             </tr></thead>
                             <tbody id="outputBody"></tbody>
                         </table>
+                        <h2 class="label section-title">Backups</h2>
+                        <div id="outputBackups"></div>
                     </div>
                 </section>
 
                 <section class="view" data-view="settings" aria-labelledby="h-settings">
                     <div class="view-scroll">
                         <h1 class="sr-only" id="h-settings">Settings</h1>
-                        <div class="panel">
+                        <div class="panel" id="settings-appearance">
                             <h2 class="label panel-title">Appearance</h2>
                             <div class="setting">
                                 <div class="setting-text"><div class="setting-name" id="themeName">Light mode</div><div class="setting-help">Use the lighter palette</div></div>
                                 <button class="switch" type="button" role="switch" id="themeSwitch" aria-checked="false" aria-labelledby="themeName"></button>
                             </div>
                         </div>
-                        <div class="panel">
-                            <h2 class="label panel-title">Run defaults</h2>
+                        <div class="panel" id="settings-scanning">
+                            <h2 class="label panel-title">Scanning</h2>
                             <div class="setting">
-                                <div class="setting-text"><label class="setting-name" for="setMaxJobs">Max jobs per company</label><div class="setting-help">Cap for very large boards</div></div>
-                                <input class="input" type="number" id="setMaxJobs" min="1" max="100000" inputmode="numeric">
+                                <div class="setting-text"><div class="setting-name" id="modeName">Parallel scans</div>
+                                    <div class="setting-help"><b>Auto:</b> pressing Enter on an address starts it at once, or as soon as a slot is free. <b>Manual:</b> Enter only adds it to the list; Start runs the list.</div></div>
+                                <div class="segmented" role="radiogroup" aria-labelledby="modeName" id="modeSeg">
+                                    <button type="button" role="radio" aria-checked="true" data-value="auto">Auto</button>
+                                    <button type="button" role="radio" aria-checked="false" data-value="manual">Manual</button>
+                                </div>
                             </div>
                             <div class="setting">
-                                <div class="setting-text"><label class="setting-name" for="setDepth">Detail depth</label><div class="setting-help">Job pages opened for full details on self-hosted sites</div></div>
-                                <input class="input" type="number" id="setDepth" min="0" max="500" inputmode="numeric">
+                                <div class="setting-text"><div class="setting-name" id="defaultAtOnceName">Default at once</div><div class="setting-help">How many companies scan together. Also set from the header.</div></div>
+                                <div class="segmented" role="radiogroup" aria-labelledby="defaultAtOnceName" id="atOnceSeg2">
+                                    <button type="button" role="radio" aria-checked="false" data-value="1">1</button>
+                                    <button type="button" role="radio" aria-checked="false" data-value="2">2</button>
+                                    <button type="button" role="radio" aria-checked="true" data-value="3">3</button>
+                                </div>
+                            </div>
+                            <div class="setting setting-slider">
+                                <div class="setting-text"><label class="setting-name" for="setLimit">Time limit per company</label><div class="setting-help">A slow or blocked site is cut off after this long. What it found so far is kept.</div></div>
+                                <div class="slider-row"><input type="range" id="setLimit" min="0" max="1" step="1"><output for="setLimit" id="limitOut"></output></div>
+                                <div class="marks" id="setLimitMarks" aria-hidden="true"></div>
+                            </div>
+                            <div class="setting setting-slider">
+                                <div class="setting-text"><label class="setting-name" for="setMaxJobs">Max postings per company</label><div class="setting-help">Only matters for very large boards (Workday, SmartRecruiters, Oracle), which are read up to this many. Default 2,000.</div></div>
+                                <div class="slider-row"><input type="range" id="setMaxJobs" min="0" max="1" step="1"><output for="setMaxJobs" id="maxJobsOut"></output></div>
+                                <div class="marks" id="setMaxJobsMarks" aria-hidden="true"></div>
+                            </div>
+                            <div class="setting setting-slider">
+                                <div class="setting-text"><label class="setting-name" for="setDepth">Job pages opened for details</label><div class="setting-help">Only for company-built career sites. Opening more is slower but fills in location and department. Default 50.</div></div>
+                                <div class="slider-row"><input type="range" id="setDepth" min="0" max="1" step="1"><output for="setDepth" id="depthOut"></output></div>
+                                <div class="marks" id="setDepthMarks" aria-hidden="true"></div>
                             </div>
                             <div class="setting">
-                                <div class="setting-text"><label class="setting-name" for="setConcurrency">Companies at once</label><div class="setting-help">How many queued companies are scanned together (1-4)</div></div>
-                                <input class="input" type="number" id="setConcurrency" min="1" max="4" inputmode="numeric">
-                            </div>
-                            <div class="setting">
-                                <div class="setting-text"><div class="setting-name" id="freshName">Fresh data by default</div><div class="setting-help">Ignore pages cached in the last 12 hours</div></div>
-                                <button class="switch" type="button" role="switch" id="setFresh" aria-checked="false" aria-labelledby="freshName"></button>
+                                <div class="setting-text"><div class="setting-name" id="reuseName">Reuse downloaded pages for</div><div class="setting-help">A rescan within this time reads saved pages instead of downloading them again, which is faster. "Off" always downloads fresh.</div></div>
+                                <div class="segmented" role="radiogroup" aria-labelledby="reuseName" id="reuseSeg">
+                                    <button type="button" role="radio" aria-checked="false" data-value="off">Off</button>
+                                    <button type="button" role="radio" aria-checked="false" data-value="1h">1 hour</button>
+                                    <button type="button" role="radio" aria-checked="true" data-value="12h">12 hours</button>
+                                </div>
                             </div>
                         </div>
-                        <div class="panel">
+                        <div class="panel" id="settings-output">
                             <h2 class="label panel-title">Output</h2>
                             <div class="setting">
                                 <div class="setting-text"><div class="setting-name" id="autosaveName">Save JSON and CSV automatically</div><div class="setting-help">Write files as each company finishes</div></div>
                                 <button class="switch" type="button" role="switch" id="setAutosave" aria-checked="true" aria-labelledby="autosaveName"></button>
                             </div>
                             <div class="setting">
+                                <div class="setting-text"><div class="setting-name" id="scopeName">Exports include</div><div class="setting-help">Matching postings only uses the filters that are on; Everything ignores them. Filtered files say so in their name.</div></div>
+                                <div class="segmented" role="radiogroup" aria-labelledby="scopeName" id="scopeSeg">
+                                    <button type="button" role="radio" aria-checked="true" data-value="matching">Matching</button>
+                                    <button type="button" role="radio" aria-checked="false" data-value="everything">Everything</button>
+                                </div>
+                            </div>
+                            <div class="setting">
                                 <div class="setting-text"><div class="setting-name">Exports folder</div><div class="setting-help path" id="exportsPath">…</div></div>
                                 <button class="btn" type="button" id="openFolderBtn2">Open</button>
                             </div>
+                        </div>
+                        <div class="panel">
+                            <h2 class="label panel-title">Data &amp; storage</h2>
+                            <div class="stat-grid" id="dsStats"></div>
+                            <div class="toolbar" style="margin-bottom:0">
+                                <button class="btn" type="button" id="clearCacheBtn">Clear cache</button>
+                                <button class="btn" type="button" id="compactBtn">Compact database</button>
+                            </div>
+                            <p class="hint" id="storageHint"></p>
+                            <details class="explain">
+                                <summary>What is the cache?</summary>
+                                <p><strong>Saved pages</strong> (the page cache) let a rescan within the reuse time read pages from disk instead of downloading them. That is what makes rescans fast. Clearing it makes the next scan of each company slower but fresh.</p>
+                                <p>Two small in-memory caches (DNS answers and parsed pages) are cleared with it. Your history, exports and backups are never touched.</p>
+                            </details>
+                            <div class="setting">
+                                <div class="setting-text"><div class="setting-name" id="autoBackupName">Back up automatically at launch</div><div class="setting-help">Keeps the last 10 automatic backups. Only made when your data changed since the last one.</div></div>
+                                <button class="switch" type="button" role="switch" id="setAutoBackup" aria-checked="true" aria-labelledby="autoBackupName"></button>
+                            </div>
+                            <div id="settingsBackups"></div>
                         </div>
                     </div>
                 </section>
@@ -246,6 +308,7 @@
                             <div class="setting">
                                 <div class="setting-text"><div class="setting-name" id="workersName">Browsers at once</div><div class="setting-help">How many hidden Chrome windows may render pages in parallel</div></div>
                                 <div class="segmented" role="radiogroup" aria-labelledby="workersName" id="workersSeg">
+                                    <button type="button" role="radio" aria-checked="false" data-workers="auto" title="One per company scanning at once, at most two">Auto</button>
                                     <button type="button" role="radio" aria-checked="true" data-workers="1">1</button>
                                     <button type="button" role="radio" aria-checked="false" data-workers="2">2</button>
                                     <button type="button" role="radio" aria-checked="false" data-workers="3">3</button>
@@ -260,11 +323,7 @@
                         <div class="panel">
                             <h2 class="label panel-title">Storage</h2>
                             <div class="stat-grid" id="storageStats"></div>
-                            <div class="toolbar" style="margin-bottom:0">
-                                <button class="btn" type="button" id="clearCacheBtn">Clear cache</button>
-                                <button class="btn" type="button" id="compactBtn">Compact database</button>
-                            </div>
-                            <p class="hint" id="storageHint">Old cache files, old scans and long-closed postings are removed automatically at start-up.</p>
+                            <p class="hint">Read-only. Clear the cache, compact the database and manage backups in Settings → Data &amp; storage.</p>
                         </div>
                         <div class="panel">
                             <h2 class="label panel-title">Locations</h2>

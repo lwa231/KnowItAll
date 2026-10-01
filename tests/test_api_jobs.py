@@ -89,9 +89,13 @@ def test_export_all_includes_the_new_columns(app, tmp_path, monkeypatch):
     runner = app.service.runner
     runner.order = ["acme.com"]
     runner.companies = {"acme.com": {"run_id": run_id, "notes": []}}
+    session = app.service.begin_session()                      # "Export this session" exports this launch's scans
+    store.connect().execute("UPDATE runs SET session_id = ?", (session,)); store.connect().commit()
     status, body, _ = app.call("POST", "/api/export", {}, app.json)
-    assert status == 200 and json.loads(body)["rows"] == 3
-    header = (tmp_path / "exports" / "jobs_all_companies.csv").read_text(encoding="utf-8-sig").splitlines()[0]
+    written = json.loads(body)
+    assert status == 200 and written["rows"] == 3
+    header = open(written["written"], encoding="utf-8-sig").read().splitlines()[0]
+    assert written["written"].split("/")[-1].startswith("knowitall_session_")
     assert header.split(",")[-6:] == ["workplace", "employment_type", "city", "region", "country", "geo_confidence"]
 
 

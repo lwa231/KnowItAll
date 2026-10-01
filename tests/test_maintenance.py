@@ -16,6 +16,7 @@ from knowitall.service import Service
 def db(tmp_path, monkeypatch):
     monkeypatch.setattr(store, "DB_PATH", tmp_path / "history.db")
     monkeypatch.setattr(store._local, "conn", None, raising=False)
+    monkeypatch.setattr(store, "CLOSE_AFTER", timedelta(0))        # closing itself is tested elsewhere; here it is a means
     store.init()
     yield store
     conn = getattr(store._local, "conn", None)

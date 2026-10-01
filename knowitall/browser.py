@@ -269,7 +269,7 @@ class BrowserPool:
                 self._ensure_reaper()
             try:
                 slot.capture = _JsonCapture(url) if mode == "listing" else None
-                html, final_url = self._load(driver, url)
+                html, final_url = self._load(driver, url, should_cancel)
                 page = _page(url, final_url, 200, html)
                 if mode == "listing":
                     page["html"] = self._explore(driver, html, should_cancel, count_links, max_jobs)
@@ -339,12 +339,12 @@ class BrowserPool:
             found = max(found, links(html))
         return html
 
-    def _load(self, driver, url):
+    def _load(self, driver, url, should_cancel=None):
         driver.get(url, timeout=self._load_timeout)
         deadline = self._clock() + self._load_timeout
         html, final_url = "", url
         ready_since = None
-        while self._clock() < deadline:
+        while self._clock() < deadline and not self._cancelled(should_cancel):
             try:
                 final_url = driver.current_url or url
                 ready = driver.run_js("return document.readyState") == "complete"

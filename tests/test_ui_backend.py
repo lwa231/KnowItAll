@@ -13,6 +13,22 @@ from tests.test_browser_pool import FakeDriver
 
 
 # ---------- settings ----------
+def test_a_saved_value_between_slider_stops_round_trips_unchanged(tmp_path):
+    path = tmp_path / "settings.json"
+    settings_store.save({**settings_store.DEFAULTS, "max_jobs": 2500, "max_enrich": 37}, path)
+    loaded = settings_store.load(path)
+    assert loaded["max_jobs"] == 2500 and loaded["max_enrich"] == 37
+
+
+def test_queue_panel_open_defaults_on_and_is_a_boolean(tmp_path):
+    assert settings_store.DEFAULTS["queue_panel_open"] is True
+    assert settings_store.validate({"queue_panel_open": False}) == {"queue_panel_open": False}
+    path = tmp_path / "settings.json"
+    settings_store.save({**settings_store.DEFAULTS, "queue_panel_open": False}, path)
+    assert settings_store.load(path)["queue_panel_open"] is False
+    path.write_text('{"queue_panel_open": "no"}')
+    assert settings_store.load(path)["queue_panel_open"] is True
+
 
 def test_defaults_when_nothing_is_saved(tmp_path):
     assert settings_store.load(tmp_path / "nope.json") == settings_store.DEFAULTS
@@ -20,7 +36,7 @@ def test_defaults_when_nothing_is_saved(tmp_path):
 
 def test_round_trip_and_atomic_write(tmp_path):
     path = tmp_path / "settings.json"
-    values = {**settings_store.DEFAULTS, "theme": "light", "max_jobs": 500, "fresh": True}
+    values = {**settings_store.DEFAULTS, "theme": "light", "max_jobs": 500, "cache_reuse": "1h"}
     settings_store.save(values, path)
     assert settings_store.load(path) == values
     assert [p.name for p in tmp_path.iterdir()] == ["settings.json"]        # no temp file left behind
@@ -33,16 +49,16 @@ def test_damaged_or_hand_edited_files_fall_back_field_by_field(tmp_path, content
     path.write_text(content)
     loaded = settings_store.load(path)
     assert set(loaded) == set(settings_store.DEFAULTS)
-    assert loaded["theme"] in ("dark", "light") and 1 <= loaded["concurrency"] <= 4
+    assert loaded["theme"] in ("dark", "light") and 1 <= loaded["concurrency"] <= 3
     assert loaded["max_jobs"] != True and isinstance(loaded["max_jobs"], int)
-    assert isinstance(loaded["fresh"], bool) and 1 <= loaded["browser_workers"] <= 3
+    assert loaded["cache_reuse"] in ("off", "1h", "12h") and 1 <= loaded["browser_workers"] <= 3
 
 
 def test_out_of_range_numbers_are_clamped_when_loading(tmp_path):
     path = tmp_path / "settings.json"
     path.write_text(json.dumps({"concurrency": 99, "browser_workers": 0, "max_jobs": 10**9, "max_enrich": -5}))
     loaded = settings_store.load(path)
-    assert (loaded["concurrency"], loaded["browser_workers"], loaded["max_jobs"], loaded["max_enrich"]) == (4, 1, 100_000, 0)
+    assert (loaded["concurrency"], loaded["browser_workers"], loaded["max_jobs"], loaded["max_enrich"]) == (3, 1, 100_000, 0)
 
 
 def test_unknown_keys_are_dropped_on_save(tmp_path):
@@ -52,7 +68,7 @@ def test_unknown_keys_are_dropped_on_save(tmp_path):
 
 @pytest.mark.parametrize("update", [
     {"theme": "neon"}, {"max_jobs": 0}, {"max_jobs": "5"}, {"max_jobs": True}, {"max_jobs": 1.5},
-    {"concurrency": 5}, {"browser_workers": 4}, {"fresh": "yes"}, {"autosave": 1}, {"nonsense": 1}, [], "text", None,
+    {"concurrency": 4}, {"browser_workers": 4}, {"fresh": "yes"}, {"autosave": 1}, {"nonsense": 1}, [], "text", None,
 ])
 def test_validate_rejects_bad_updates(update):
     with pytest.raises(ValueError):
@@ -68,7 +84,7 @@ def test_service_merges_saves_and_applies_settings(tmp_path):
     service = Service(settings_path=tmp_path / "settings.json")
     pool = BrowserPool(size=1, driver_factory=lambda h: FakeDriver())
     service.attach_browser(pool)
-    assert pool.size == 1
+    assert pool.size == 2                                                     # automatic: follows "At once" (3), at most 2
     result = service.update_settings({"browser_workers": 3, "theme": "light"})
     assert result["browser_workers"] == 3 and result["theme"] == "light" and result["max_jobs"] == 2000
     assert pool.size == 3                                                     # applied at once
@@ -183,7 +199,7 @@ def test_system_info_shape_with_and_without_a_browser(tmp_path):
     pool = BrowserPool(size=2, driver_factory=lambda h: FakeDriver(), settle=0)
     service.attach_browser(pool)
     on = service.system_info()
-    assert on["browser"] == {"enabled": True, "available": True, "reason": None, "workers": 1, "active": 0}
+    assert on["browser"] == {"enabled": True, "available": True, "reason": None, "workers": 2, "active": 0}
     pool.render("https://x.com/1")
     assert service.system_info()["browser"]["active"] == 1
     assert {"botasaurus", "requests", "timeouts", "abandoned"} <= set(on["requests"])

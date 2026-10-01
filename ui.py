@@ -99,7 +99,14 @@ def main(argv=None):
     service = Service()
     runner = service.runner
     runner.debug = args.debug                         # --debug also logs the JSON a rendered careers page loads
+    try:
+        backup = service.auto_backup()                # BEFORE server.serve() opens (and may migrate) the database
+        if backup:
+            log(f"backed up the database: {backup['name']}")
+    except Exception as error:                        # a failed backup must never stop the app from starting
+        log(f"automatic backup failed: {type(error).__name__}: {error}")
     httpd, url = server.serve(service)
+    service.begin_session()
     log(f"server ready at {url}")
     service.prune_in_background()
 
@@ -122,6 +129,7 @@ def main(argv=None):
         stopping.set()
         log("shutting down")
         service.stop()
+        service.end_session()
         try:
             server.shutdown(httpd)
         except Exception:
@@ -148,6 +156,7 @@ def main(argv=None):
                 "Quit KnowItAll now? Jobs found so far are kept."))
         return True
 
+    shell.set_app_user_model_id()                            # Windows taskbar: KnowItAll, not Python
     try:
         window = webview.create_window("KnowItAll", url, **options)
         window.events.resized += lambda width, height: state.update(width=width, height=height)
@@ -158,7 +167,7 @@ def main(argv=None):
         _handle_interrupt(window)
 
         log("KnowItAll is running. Close the window to quit.")
-        webview.start(debug=args.debug, gui=shell.webview_backend())
+        webview.start(debug=args.debug, gui=shell.webview_backend(), icon=str(shell.icon_path()))
     except Exception as error:
         log(f"could not open the window: {type(error).__name__}: {error}")
         print(NO_WEBVIEW_HELP.format(error=error), file=sys.stderr)

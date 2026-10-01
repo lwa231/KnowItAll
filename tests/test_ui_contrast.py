@@ -72,3 +72,57 @@ def test_no_font_size_token_is_below_12px():
 
 def test_every_theme_defines_the_same_tokens():
     assert set(BLOCKS["dark"]) == set(BLOCKS["light"])
+
+
+# ---- Phase 6: brand red, slider, status colour, progress gradient ----
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_slider_ring_is_visible_against_the_track_and_the_panel(theme):
+    colours = BLOCKS[theme]
+    assert ratio(colours["slider-ring"], colours["secondary-hi"]) >= 3.0, f"{theme}: ring on the track"
+    assert ratio(colours["slider-ring"], colours["bg-raise"]) >= 3.0, f"{theme}: ring on the panel"
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_the_active_rail_icon_reads_on_its_highlight(theme):
+    colours = BLOCKS[theme]
+    assert ratio(colours["accent-text"], colours["secondary"]) >= 4.5
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_the_scanning_colour_reads_on_the_header(theme):
+    colours = BLOCKS[theme]
+    assert ratio(colours["status-active"], colours["chrome"]) >= 4.5, f"{theme}: --status-active on --chrome"
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_the_progress_gradient_colours_exist(theme):
+    for token in ("progress-start", "progress-mid", "progress-end"):
+        assert token in BLOCKS[theme], f"{theme} has no --{token}"
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_the_brand_red_is_the_one_in_the_brief(theme):
+    assert BLOCKS[theme]["accent"].lower() == "#bf1704"
+
+
+@pytest.mark.parametrize("theme", ["dark", "light"])
+def test_the_error_colour_is_not_the_brand_red(theme):
+    """Red is the brand and red also means error: the error colour keeps a different hue (icon and words carry it too)."""
+    import colorsys
+
+    def hue(value):
+        r, g, b = (int(value[i:i + 2], 16) / 255 for i in (1, 3, 5))
+        return colorsys.rgb_to_hsv(r, g, b)[0] * 360
+
+    gap = abs(hue(BLOCKS[theme]["red"]) - hue(BLOCKS[theme]["accent-text"]))
+    assert min(gap, 360 - gap) >= 15, f"{theme}: error and brand red are only {gap:.0f} degrees apart"
+
+
+def test_no_purple_or_blue_is_left_in_the_ui():
+    """Every hue of the old indigo accent is gone from tokens, styles and scripts."""
+    ui = TOKENS.parent.parent
+    old = ("35365e", "414273", "9899c8", "2a2b4d", "eceef3")
+    for path in [*(ui / "css").glob("*.css"), *(ui / "js").rglob("*.js"), ui / "index.html"]:
+        text = path.read_text(encoding="utf-8").lower()
+        for value in old:
+            assert value not in text, f"{path.name} still has the old accent #{value}"

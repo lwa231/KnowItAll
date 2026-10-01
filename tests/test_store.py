@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import pytest
 
 from knowitall import store
@@ -7,6 +9,7 @@ from knowitall import store
 def db(tmp_path, monkeypatch):
     monkeypatch.setattr(store, "DB_PATH", tmp_path / "history.db")
     monkeypatch.setattr(store._local, "conn", None, raising=False)
+    monkeypatch.setattr(store, "CLOSE_AFTER", timedelta(0))        # these tests are about the two-miss rule; the 24 h gap has its own
     store.init()
     yield store
     conn = getattr(store._local, "conn", None)

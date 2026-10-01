@@ -1,6 +1,9 @@
 import json
 import subprocess
 import sys
+from pathlib import Path
+
+import pytest
 
 from knowitall import shell
 from knowitall.runner import Runner
@@ -89,3 +92,38 @@ def test_macos_interrupt_takeover_imports_pyobjc_on_the_main_thread():
     assert not [n for n in ast.walk(helper) if isinstance(n, (ast.Import, ast.ImportFrom))]
     imported = {alias.name for n in ast.walk(handler) if isinstance(n, ast.ImportFrom) for alias in n.names}
     assert {"MachSignals", "_machsignals"} <= imported
+
+
+@pytest.mark.parametrize("platform", ["win32", "darwin", "linux"])
+def test_the_app_icon_for_every_platform_exists(platform):
+    path = shell.icon_path(platform)
+    assert path.is_file(), path
+    assert path.suffix == (".ico" if platform == "win32" else ".png")
+
+
+def test_the_windows_app_id_is_set_only_on_windows():
+    calls = []
+
+    class Fake:
+        class windll:
+            class shell32:
+                SetCurrentProcessExplicitAppUserModelID = staticmethod(calls.append)
+
+    assert shell.set_app_user_model_id("win32", Fake) is True and calls == ["KnowItAll.Desktop"]
+    assert shell.set_app_user_model_id("darwin", Fake) is False and shell.set_app_user_model_id("linux", Fake) is False
+    assert calls == ["KnowItAll.Desktop"]
+
+
+def test_a_failing_app_id_call_never_stops_the_app():
+    class Broken:
+        windll = None
+    assert shell.set_app_user_model_id("win32", Broken) is False
+
+
+def test_the_spec_bundles_the_icons_and_every_module():
+    spec = (Path(__file__).resolve().parent.parent / "knowitall.spec").read_text(encoding="utf-8")
+    assert '("knowitall/assets", "knowitall/assets")' in spec and "knowitall.icns" in spec and 'icon="knowitall/assets/icons/knowitall.ico"' in spec
+    modules = Path(__file__).resolve().parent.parent / "knowitall"
+    for path in modules.glob("*.py"):
+        if path.name != "__init__.py":
+            assert f'"knowitall.{path.stem}"' in spec, f"{path.stem} is missing from hiddenimports"

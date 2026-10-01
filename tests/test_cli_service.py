@@ -133,4 +133,4 @@ def test_open_exports_uses_the_platform_opener(sandbox, monkeypatch):
 def test_stop_by_domain_is_available_through_http(app):
     import json as _json
     status, body, _ = app.call("POST", "/api/stop", {"domain": "nobody.com"}, app.json)
-    assert status == 200 and _json.loads(body) == {"stopped": True}
+    assert status == 200 and _json.loads(body) == {"stopped": False}        # nothing by that name was running (audit M9c)

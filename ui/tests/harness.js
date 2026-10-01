@@ -1,12 +1,21 @@
 // Tests for the UI's pure logic. No framework: each test is a function that throws on failure.
 import { esc, relTime, fmtBytes, fmtNum, clamp, debounce, throttle, countryName, safeHref, fmtClock } from '/ui/js/util.js';
-import { filters, toParams, activeCount, isFiltering, setFilters, toggleValue, clearKey, clearFilters, resetForTests } from '/ui/js/filters.js';
+import { filters, toParams, activeCount, isFiltering, setFilters, toggleValue, clearKey, clearFilters, resetForTests, profileOf, applySaved, unfiltered } from '/ui/js/filters.js';
+import { counts, matchesOf } from '/ui/js/counts.js';
+import { hintsHTML } from '/ui/js/table.js';
 import { PaneData, PAGE, resetPaneDataForTests, paneData } from '/ui/js/jobs.js';
 import { rowHTML, bodyHTML, footerHTML, skeletonHTML } from '/ui/js/table.js';
 import { geometry } from '/ui/js/workspace.js';
 import { state, on, emit } from '/ui/js/state.js';
 import { renderQueue } from '/ui/js/queue.js';
 import { noListingsHTML, withoutDomain, paintPhases, tickClocks } from '/ui/js/outcomes.js';
+import { paintRunState, paintMetrics, initRun } from '/ui/js/run.js';
+import { showView, initRail } from '/ui/js/nav.js';
+import { initQueuePanel, toggleQueuePanel } from '/ui/js/queuepanel.js';
+import { trail, initBreadcrumbs, renderCrumbs } from '/ui/js/breadcrumbs.js';
+import { nearestIndex, bindSteppedSlider } from '/ui/js/slider.js';
+import { TIME_STOPS, JOB_STOPS, DEPTH_STOPS } from '/ui/js/views/settings.js';
+import { DEFAULTS, syncBindings } from '/ui/js/settings.js';
 
 const tests = [];
 const test = (name, fn) => tests.push([name, fn]);
@@ -122,6 +131,44 @@ test('bodyHTML: skeleton, empty, table with footer outside it', () => {
     state.companies = []; resetPaneDataForTests();
 });
 
+/* ------------------------------------------------------------- filters as barriers (phase 3) */
+test('"include postings that don\'t say" alone narrows nothing; beside a choice it widens it', () => {
+    resetForTests(); toggleValue('workplace', 'unknown');
+    eq(activeCount(), 0); eq(toParams().getAll('workplace'), []);
+    toggleValue('workplace', 'remote'); eq(activeCount(), 1); eq(toParams().getAll('workplace'), ['unknown', 'remote']);
+    resetForTests(); toggleValue('country', 'unknown'); eq(activeCount(), 0);
+    toggleValue('region_group', 'EMEA'); eq(toParams().getAll('country'), ['unknown']);
+    resetForTests();
+});
+test('only the chip filters are saved; search, New only and the status switch are not', () => {
+    resetForTests(); setFilters({ q: 'x', new_only: true, status: 'closed', posted_within_days: 7 }); toggleValue('workplace', 'remote'); toggleValue('country', 'unknown');
+    eq(profileOf(), { workplace: ['remote'], country: ['unknown'], posted_within_days: 7 });
+    applySaved({ workplace: ['hybrid'], source: ['lever'], posted_within_days: 30 });
+    eq([filters.workplace, filters.source, filters.posted_within_days, filters.q, filters.new_only, filters.status], [['hybrid'], ['lever'], 30, '', false, 'current'], 'restored, and nothing else carried over');
+    applySaved(undefined); eq(activeCount(), 0); resetForTests();
+});
+test('unfiltered() keeps the Listed/Gone/Closed choice and nothing else', () => {
+    resetForTests(); toggleValue('workplace', 'remote'); setFilters({ q: 'a', status: 'missing' });
+    const p = toParams({}, unfiltered()); eq(p.toString(), 'status=missing'); resetForTests();
+});
+test('queue counts are matches only while filters are on and answered', () => {
+    resetForTests(); Object.assign(counts, { ready: true, filtering: true, matchByDomain: { 'a.com': 12 } });
+    eq(matchesOf('a.com'), 12); eq(matchesOf('b.com'), 0); counts.filtering = false; eq(matchesOf('a.com'), null); counts.ready = false; eq(matchesOf('a.com'), null);
+});
+test('the feed offers to show postings hidden only because the field is not stated', () => {
+    counts.hidden = { workplace: 38, country: 1 };
+    const html = hintsHTML();
+    ok(html.includes("+38 postings don't state workplace — show them") && html.includes("+1 posting doesn't state location — show it") && html.includes('data-show-unknown="workplace"'), html);
+    counts.hidden = {}; eq(hintsHTML(), '');
+});
+test('while scanning with filters on and nothing matching yet, the pane says how many were checked', () => {
+    state.runView = {}; state.running = true; resetForTests(); toggleValue('workplace', 'remote');
+    state.companies = [company({ state: 'scanning', jobs_count: 340, phase: 'x', started_at: 1 })];
+    const html = bodyHTML(paneFor('acme.com'));
+    ok(html.includes('0 matches so far (340 postings checked)') && !html.includes('No postings match'), html);
+    resetForTests(); state.running = false; state.companies = [];
+});
+
 /* ------------------------------------------------------------- scan outcomes (1H) */
 const company = over => ({ domain: 'acme.com', company: 'Acme', state: 'done', jobs_count: 0, new_count: 0, missing_count: 0, closed_count: 0,
                            outcome: null, outcome_detail: null, outcome_hint: null, outcome_short: null, careers_url: null, careers_note: null, phase: null, started_at: null, ...over });
@@ -224,10 +271,21 @@ test('rowHTML renders a scraped javascript: address as plain text, not a link', 
 });
 test('fmtClock', () => { eq(fmtClock(0), '0:00'); eq(fmtClock(65.9), '1:05'); eq(fmtClock(3600), '60:00'); eq(fmtClock(-5), '0:00'); eq(fmtClock('x'), '0:00'); });
 
+test('a waiting company says how many are ahead, in its pane and its queue row', () => {
+    state.runView = {}; state.running = true; state.activeTab = 'ALL';
+    state.companies = [company({ domain: 'a.com', state: 'waiting', waiting_ahead: 2 })];
+    ok(bodyHTML(paneFor('a.com')).includes('Waiting — 2 ahead'));
+    renderQueue();
+    ok(document.getElementById('queueList').textContent.includes('Waiting — 2 ahead'));
+    state.companies = [company({ domain: 'a.com', state: 'ready' })];
+    ok(bodyHTML(paneFor('a.com')).includes('Ready to scan'));
+    state.running = false; state.companies = []; renderQueue();
+});
+
 /* ------------------------------------------------------------- the sidebar queue is updated in place */
 test('queue rows are updated in place: keyboard focus survives server messages', () => {
     state.running = true; state.activeTab = 'ALL';
-    state.companies = [company({ domain: 'a.com', state: 'scanning', jobs_count: 3, phase: 'Finding the careers page…' }), company({ domain: 'b.com', state: 'queued' })];
+    state.companies = [company({ domain: 'a.com', state: 'scanning', jobs_count: 3, phase: 'Finding the careers page…' }), company({ domain: 'b.com', state: 'waiting', waiting_ahead: 0 })];
     renderQueue();
     const list = document.getElementById('queueList');
     const rowA = list.children[0], stopA = rowA.querySelector('[data-stop]');
@@ -357,7 +415,171 @@ test('state bus: handlers can unsubscribe and a failing handler does not stop th
     eq([a, b], [1, 2]);
 });
 
+
+/* ------------------------------------------------------------- Phase 6: rail, queue panel, breadcrumbs, sliders, status */
+const $ = selector => document.querySelector(selector);
+const tick = ms => new Promise(resolve => setTimeout(resolve, ms));
+const wide = () => { const real = window.matchMedia; window.matchMedia = query => ({ matches: false, media: query, addEventListener() {}, removeEventListener() {} }); return () => { window.matchMedia = real; }; };
+const cssVar = name => { const probe = document.createElement('i'); probe.style.color = `var(--${name})`; $('#fixture').append(probe); const value = getComputedStyle(probe).color; probe.remove(); return value; };
+const resetNav = () => { state.activeView = 'scraper'; state.activeTab = 'ALL'; state.runView = {}; state.openedFrom = null; state.settingsSection = null; };
+const crumbText = () => [...document.querySelectorAll('#crumbList li:not(.crumb-sep)')].map(li => li.textContent.trim() || li.querySelector('[aria-label]')?.getAttribute('aria-label'));
+const posts = [];
+const mockApi = () => { posts.length = 0; window.fetch = async (url, init = {}) => { posts.push({ url: String(url), method: init.method || 'GET', body: init.body ? JSON.parse(init.body) : null }); const isSave = String(url).endsWith('/api/settings') && init.method === 'POST';
+    return new Response(JSON.stringify(isSave ? { ...state.settings, ...JSON.parse(init.body) } : {}), { status: 200 }); }; };   // saves echo the merged settings, like the server
+let navReady = false;
+const initNavOnce = () => { if (navReady) return; navReady = true; initRail(); };
+
+test('rail: clicking each item switches the view and moves aria-current; every item has a name', () => {
+    mockApi(); initNavOnce();
+    for (const name of ['history', 'output', 'settings', 'system', 'scraper']) {
+        $(`.rail-item[data-view="${name}"]`).click();
+        eq(state.activeView, name);
+        eq([...document.querySelectorAll('.rail-item[aria-current="page"]')].map(b => b.dataset.view), [name]);
+        ok($(`.view[data-view="${name}"]`).classList.contains('active'));
+    }
+    const items = [...document.querySelectorAll('.rail-item')];
+    eq(items.length, 7); ok(items.every(b => b.getAttribute('aria-label')), 'every rail item has an accessible name');
+    ok(items.every(b => b.querySelector('.tip[aria-hidden="true"]')), 'and a tooltip that is hidden from screen readers');
+});
+test('rail: a tooltip shows on hover and on keyboard focus', () => {
+    const rule = [...document.styleSheets].flatMap(sheet => { try { return [...sheet.cssRules]; } catch { return []; } }).map(r => r.cssText).join('\n');
+    ok(/\.rail-item:focus-visible \.tip/.test(rule) && /\.rail-item:hover \.tip/.test(rule), 'the CSS shows the tip on hover and :focus-visible');
+    const button = $('.rail-item[data-view="history"]'), tip = button.querySelector('.tip');
+    eq(getComputedStyle(tip).visibility, 'hidden');
+    button.focus();
+    if (button.matches(':focus-visible')) eq(getComputedStyle(tip).visibility, 'visible', 'visible while focused by keyboard');
+    button.blur();
+});
+test('rail: Quit posts /api/quit', async () => {
+    mockApi(); window.close = () => {}; initRun();              // (stays stubbed: run.js closes the window 300 ms after Quit)
+    $('#quitBtn').click(); await tick(20);
+    ok(posts.some(p => p.url.endsWith('/api/quit') && p.method === 'POST'), 'posted /api/quit');
+});
+
+test('queue panel: the toggle shows/hides it, flips aria-pressed and saves through setSetting', async () => {
+    const restore = wide(); mockApi(); resetNav();
+    state.settings = { ...DEFAULTS, queue_panel_open: true };
+    initQueuePanel(showView);
+    eq([$('#queuePanel').hidden, $('#queueToggle').getAttribute('aria-pressed')], [false, 'true']);
+    toggleQueuePanel();
+    eq([$('#queuePanel').hidden, $('#queueToggle').getAttribute('aria-pressed'), $('#app').dataset.queue], [true, 'false', 'off']);
+    await tick(400);
+    ok(posts.some(p => p.url.endsWith('/api/settings') && p.body.queue_panel_open === false), 'the closed state is saved');
+    toggleQueuePanel();
+    eq([$('#queuePanel').hidden, $('#queueToggle').getAttribute('aria-pressed')], [false, 'true']);
+    await tick(400); eq(posts.at(-1).body.queue_panel_open, true);
+    restore();
+});
+test('queue panel: it shows on the Scraper view only, and the Queue button brings you back and opens it', async () => {
+    const restore = wide(); mockApi(); resetNav();
+    state.settings = { ...DEFAULTS, queue_panel_open: true }; initNavOnce();
+    $('.rail-item[data-view="settings"]').click();
+    eq($('#queuePanel').hidden, true, 'hidden away from the Scraper');
+    state.settings = { ...state.settings, queue_panel_open: false };
+    $('#queueToggle').click();
+    eq([state.activeView, $('#queuePanel').hidden], ['scraper', false], 'switched to the Scraper with the panel open');
+    await tick(400); restore(); state.settings = { ...DEFAULTS };
+});
+
+test('breadcrumbs: Scraper All tab, company tab, older scan, from History, other views, Settings sections', () => {
+    resetNav(); const go = [];
+    initBreadcrumbs({ showView: v => go.push(['view', v]), selectTab: t => go.push(['tab', t]), showLatest: d => go.push(['latest', d]) });
+    eq(crumbText(), ['Home', 'Scraper']);
+    state.activeTab = 'stripe.com'; emit('active-tab', 'stripe.com'); eq(crumbText(), ['Home', 'Scraper', 'stripe.com']);
+    state.runView['stripe.com'] = 12; emit('run-view', 'stripe.com'); eq(crumbText(), ['Home', 'Scraper', 'stripe.com', 'Scan #12']);
+    state.openedFrom = 'history'; renderCrumbs(); eq(crumbText(), ['Home', 'History', 'stripe.com', 'Scan #12']);
+    $('#crumbList [data-act="history"]').click(); eq(go.at(-1), ['view', 'history']);
+    $('#crumbList [data-act="latest:stripe.com"]').click(); eq(go.at(-1), ['latest', 'stripe.com']);
+    emit('active-tab', 'stripe.com'); eq(state.openedFrom, null, 'switching tabs clears where it was opened from');
+    delete state.runView['stripe.com']; state.activeTab = 'ALL';
+    for (const view of ['history', 'output', 'system']) { state.activeView = view; renderCrumbs(); eq(crumbText(), ['Home', view[0].toUpperCase() + view.slice(1)]); }
+    state.activeView = 'settings'; renderCrumbs(); eq(crumbText(), ['Home', 'Settings']);
+    state.settingsSection = 'scanning'; renderCrumbs(); eq(crumbText(), ['Home', 'Settings', 'Scanning']);
+    $('#crumbList [data-act="settings"]').click(); eq(go.at(-1), ['view', 'settings']);
+    resetNav(); renderCrumbs();
+});
+test('breadcrumbs: the last crumb is text marked aria-current and Home goes to Scraper / All', () => {
+    resetNav(); state.activeTab = 'a.com'; state.activeView = 'scraper'; renderCrumbs();
+    const items = document.querySelectorAll('#crumbList li:not(.crumb-sep)'), last = items[items.length - 1];
+    const current = last.querySelector('[aria-current="page"]');
+    ok(current && current.tagName === 'SPAN' && !last.querySelector('button'), 'the current page is not a link');
+    eq(document.querySelectorAll('#crumbList [aria-current="page"]').length, 1);
+    ok([...document.querySelectorAll('#crumbList .crumb-sep')].every(li => li.getAttribute('aria-hidden') === 'true'), 'separators are hidden from screen readers');
+    eq($('#crumbList [data-act="home"]').getAttribute('aria-label'), 'Home');
+    resetNav(); renderCrumbs();
+});
+
+test('sliders: index <-> value for time limit, postings and detail depth', () => {
+    for (const stops of [TIME_STOPS, JOB_STOPS, DEPTH_STOPS]) stops.forEach((value, i) => eq(nearestIndex(stops, value), i));
+    eq(TIME_STOPS, [1, 3, 5]); eq(JOB_STOPS[3], 2000); eq(DEPTH_STOPS[3], 50);
+    eq(JOB_STOPS, [100, 500, 1000, 2000, 5000, 10000, 50000, 100000]); eq(DEPTH_STOPS, [0, 10, 25, 50, 100, 250, 500]);
+    eq([nearestIndex(JOB_STOPS, 2500), nearestIndex(JOB_STOPS, 99999), nearestIndex(DEPTH_STOPS, 37)], [3, 7, 2]);
+});
+test('sliders: a saved value between stops shows the nearest stop and is not overwritten', async () => {
+    mockApi(); state.settings = { ...DEFAULTS, max_jobs: 2500 };
+    const input = $('#setMaxJobs');
+    bindSteppedSlider(input, 'max_jobs', JOB_STOPS, n => n.toLocaleString('en-US'), { valueText: n => `${n} postings` });
+    eq([input.value, input.closest('.slider-row').querySelector('output').textContent], ['3', '2,500'], 'nearest stop, real value in the readout');
+    syncBindings(); await tick(400);
+    ok(!posts.some(p => p.url.endsWith('/api/settings')), 'nothing was saved');
+    eq(state.settings.max_jobs, 2500);
+});
+test('sliders: moving one updates the readout and aria-valuetext, and change saves stops[index]', async () => {
+    mockApi(); state.settings = { ...DEFAULTS, max_enrich: 50, time_limit_min: 3 };
+    const depth = $('#setDepth');
+    bindSteppedSlider(depth, 'max_enrich', DEPTH_STOPS, n => `${n} pages`);
+    depth.value = '5'; depth.dispatchEvent(new Event('input', { bubbles: true }));
+    eq([depth.closest('.slider-row').querySelector('output').textContent, depth.getAttribute('aria-valuetext')], ['250 pages', '250 pages']);
+    eq(posts.length, 0, 'input alone saves nothing');
+    depth.dispatchEvent(new Event('change', { bubbles: true })); await tick(400);
+    eq(posts.at(-1).body, { max_enrich: 250 });
+    const limit = $('#setLimit');
+    bindSteppedSlider(limit, 'time_limit_min', TIME_STOPS, n => `${n} min`, { valueText: n => `${n} ${n === 1 ? 'minute' : 'minutes'}`, marks: [[0, '1 min'], [1, '3 min'], [2, '5 min']] });
+    eq([limit.min, limit.max, limit.value, limit.getAttribute('aria-valuetext')], ['0', '2', '1', '3 minutes']);
+    eq([...limit.closest('.setting-slider').querySelectorAll('.marks span')].map(m => [m.textContent, m.style.left]), [['1 min', '0%'], ['3 min', '50%'], ['5 min', '100%']]);
+    state.settings = { ...DEFAULTS };
+});
+test('header: the old Fresh / Max jobs / Detail depth controls are gone', () => {
+    for (const id of ['hdrMaxJobs', 'hdrDepth', 'freshSwitch']) eq(document.getElementById(id), null, id);
+    ok(!$('.header').querySelector('input[type="number"]'), 'no number inputs in the header');
+});
+
+test('status character: logo colour when idle, orange while the queue is active; the label follows', () => {
+    state.settings = { ...DEFAULTS }; state.connection = 'live';
+    state.running = false; state.companies = []; paintRunState();
+    const char = $('#pixelChar'), process = $('#processToggle'), label = $('#processLabel');
+    ok(char.classList.contains('char-idle') && !process.classList.contains('running'));
+    ok(getComputedStyle(char).boxShadow.includes(cssVar('text-bright')), 'idle shadow is the logo colour');
+    eq(getComputedStyle(label).color, cssVar('text-muted'));
+    state.running = true; state.companies = [company({ domain: 'a.com', state: 'scanning' })]; paintRunState();
+    ok(char.classList.contains('char-active') && process.classList.contains('running'));
+    ok(getComputedStyle(char).boxShadow.includes(cssVar('status-active')), 'active shadow is orange');
+    eq([label.textContent, getComputedStyle(label).color], ['Scanning', cssVar('status-active')]);
+    ok(cssVar('status-active') !== cssVar('accent-text'), 'orange is not the brand red');
+    state.running = false; state.companies = []; paintRunState();
+    ok(char.classList.contains('char-idle') && !process.classList.contains('running'));
+});
+test('progress bar: width, percent and aria-valuenow follow the run; the gradient is sized to the track', () => {
+    state.companies = [company({ state: 'done', domain: 'a.com' }), company({ state: 'done', domain: 'b.com' }), company({ state: 'scanning', domain: 'c.com' }), company({ state: 'waiting', domain: 'd.com' })];
+    paintMetrics();
+    const fill = $('#progressFill'), track = $('#progressTrack');
+    eq([fill.style.width, $('#progressValue').textContent, track.getAttribute('aria-valuenow')], ['50%', '50%', '50']);
+    const width = track.getBoundingClientRect().width;
+    ok(width > 0 && getComputedStyle(fill).backgroundSize.startsWith(`${width}px`), `gradient is ${width}px wide (the track), got ${getComputedStyle(fill).backgroundSize}`);
+    ok(fill.getBoundingClientRect().width < width, 'while the fill is narrower than the track');
+    eq(getComputedStyle($('#progressValue')).color, cssVar('text-bright'));
+    state.companies = []; paintMetrics(); eq(fill.style.width, '0%');
+});
+
 /* ------------------------------------------------------------- run */
+// The real page (GET /) is mounted off screen, so the tests above see the real ids and styles.
+{
+    const html = await (await fetch('/')).text();
+    const page = new DOMParser().parseFromString(html, 'text/html');
+    const fixture = document.getElementById('fixture');
+    fixture.append(document.importNode(page.querySelector('svg[aria-hidden]'), true), document.importNode(page.querySelector('.app'), true),
+        document.importNode(page.getElementById('toasts'), true), document.importNode(page.getElementById('announcer'), true));
+}
 const lines = []; let failed = 0;
 for (const [name, fn] of tests) {
     try { window.fetch = realFetch; await fn(); lines.push(`<span class="pass">PASS</span>  ${esc(name)}`); }

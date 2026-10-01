@@ -2,8 +2,9 @@
 // Counts on the chips come from the server (/api/jobs facets), computed for the current search and the
 // other filters, so a chip never offers a choice that would leave nothing.
 import * as api from './api.js';
-import { state, on } from './state.js';
-import { filters, LIST_KEYS, STATUSES, toParams, activeCount, setFilters, toggleValue, clearKey, clearFilters } from './filters.js';
+import { state, on, emit } from './state.js';
+import { filters, STATUSES, toParams, activeCount, setFilters, toggleValue, clearKey, clearFilters, saveFiltersSoon } from './filters.js';
+import { counts, refreshCounts } from './counts.js';
 import { openPopover, closePopover, isOpen } from './popover.js';
 import { announce } from './notify.js';
 import { $, $$, esc, debounce, throttle, fmtNum, countryName, svgIcon } from './util.js';
@@ -26,44 +27,85 @@ export async function refreshFacets() {
         const data = await api.get(`/api/jobs?${params}`);
         facets = data.facets;
         total = data.total;
+        computeHints();
     } catch { /* keep the last answer; the panes show their own errors */ }
     paintSummary();
+    paintBanner();
     popoverHandle?.refresh();
     if (announceNext) {
         announceNext = false;
         if (total !== null) announce(`${fmtNum(total)} ${total === 1 ? 'posting' : 'postings'}`);
     }
 }
+/** Postings hidden only because they do not state the field being filtered (the feed offers to show them). */
+const HINT_FIELDS = { workplace: 'workplace', employment_type: 'employment type', country: 'location' };
+function computeHints() {
+    const hidden = {};
+    for (const key of Object.keys(HINT_FIELDS)) {
+        const narrowing = key === 'country' ? (filters.country.some(v => v !== 'unknown') || filters.region_group.length) : filters[key].some(v => v !== 'unknown');
+        const n = unknownCount(key);
+        if (narrowing && !filters[key].includes('unknown') && n) hidden[key] = n;
+    }
+    counts.hidden = hidden;
+    emit('hints');
+}
 const refreshFacetsSoon = debounce(refreshFacets, 200);
+const refreshCountsSoon = debounce(refreshCounts, 200);
 export const refreshFacetsLive = throttle(refreshFacets, 2500);        // while a scan is streaming rows in
 
-function options(key, labels = {}) {
-    const found = (facets?.[key] || []).map(f => ({ value: f.value === null ? 'unknown' : f.value, count: f.count, label: f.label }));
-    filters[key].forEach(value => { if (!found.some(o => o.value === value)) found.push({ value, count: 0 }); });   // a selected choice never disappears
-    return found.map(o => ({ ...o, text: labels[o.value] || o.label || o.value }));
+const WORKPLACE_VOCAB = ['remote', 'hybrid', 'onsite'];
+const TYPE_VOCAB = ['full_time', 'part_time', 'contract', 'intern', 'other'];
+const SOURCE_LABELS = { greenhouse: 'Greenhouse', lever: 'Lever', ashby: 'Ashby', smartrecruiters: 'SmartRecruiters', workday: 'Workday',
+    oracle: 'Oracle Recruiting', 'json-ld': 'Page data (JSON-LD)', 'json-sniffed': 'Data the page loaded', 'html-heuristic': 'Links on the page' };
+const SOURCE_VOCAB = Object.keys(SOURCE_LABELS);
+
+let allCountries = null;                   // every country, from /api/geo/countries: the choices exist before anything is scanned
+async function loadCountries() {
+    if (allCountries) return;
+    try { allCountries = (await api.get('/api/geo/countries')).countries; popoverHandle?.refresh(); } catch { /* the countries seen so far still show */ }
+}
+
+const countOf = (key, value) => (facets?.[key] || []).find(f => f.value === value)?.count;
+const unknownCount = key => countOf(key, null);
+
+/** Every choice a filter can make, not only the values already in the database; counts are filled in where known. */
+function options(key, vocab = [], labels = {}) {
+    const values = [...vocab];
+    (facets?.[key] || []).forEach(f => { if (f.value !== null && !values.includes(f.value)) values.push(f.value); });
+    filters[key].forEach(v => { if (v !== 'unknown' && !values.includes(v)) values.push(v); });      // a selected choice never disappears
+    return values.map(value => ({
+        value, count: facets ? (countOf(key, value) || 0) : undefined, label: (facets?.[key] || []).find(f => f.value === value)?.label,
+        text: labels[value] || (facets?.[key] || []).find(f => f.value === value)?.label || value,
+    }));
 }
 
 /* ---------------------------------------------------------------- painting */
 function chipSpecs() {
     return [
-        { id: 'workplace', label: 'Workplace', value: () => filters.workplace.map(v => WORKPLACE_LABELS[v] || v).join(', '), open: openMulti('workplace', 'Workplace', WORKPLACE_LABELS) },
-        { id: 'employment_type', label: 'Type', value: () => filters.employment_type.map(v => TYPE_LABELS[v] || v).join(', '), open: openMulti('employment_type', 'Employment type', TYPE_LABELS) },
+        { id: 'workplace', label: 'Workplace', value: () => shown('workplace', WORKPLACE_LABELS), open: openMulti('workplace', 'Workplace', WORKPLACE_VOCAB, WORKPLACE_LABELS, { unknown: true }) },
+        { id: 'employment_type', label: 'Type', value: () => shown('employment_type', TYPE_LABELS), open: openMulti('employment_type', 'Employment type', TYPE_VOCAB, TYPE_LABELS, { unknown: true }) },
         { id: 'region', label: 'Region', value: regionText, open: openRegion },
-        { id: 'department', label: 'Department', value: () => filters.department.join(', '), open: openMulti('department', 'Department', {}, true) },
-        { id: 'source', label: 'Source', value: () => filters.source.join(', '), open: openMulti('source', 'Source', {}) },
+        { id: 'department', label: 'Department', value: () => shown('department', {}), open: openMulti('department', 'Department', [], {}, { unknown: true, searchable: true, custom: true }) },
+        { id: 'source', label: 'Source', value: () => shown('source', SOURCE_LABELS), open: openMulti('source', 'Source', SOURCE_VOCAB, SOURCE_LABELS) },
         { id: 'posted', label: 'Posted', value: () => filters.posted_within_days ? (POSTED.find(p => p[0] === filters.posted_within_days)?.[1] || `${filters.posted_within_days} days`) : '', open: openPosted },
     ];
 }
 
+/** What a chip shows: the chosen values, with "+ not stated" when that box is ticked. */
+function shown(key, labels) {
+    const chosen = filters[key].filter(v => v !== 'unknown').map(v => labels[v] || v);
+    return chosen.length && filters[key].includes('unknown') ? [...chosen, 'not stated'].join(', ') : chosen.join(', ');
+}
+
 function regionText() {
-    const names = [...filters.region_group, ...filters.country.map(c => c === 'unknown' ? 'Not stated' : countryName(c))];
-    return names.join(', ');
+    const names = [...filters.region_group, ...filters.country.filter(c => c !== 'unknown').map(countryName)];
+    return names.length && filters.country.includes('unknown') ? [...names, 'no location'].join(', ') : names.join(', ');
 }
 
 function chipCount(id) {
-    if (id === 'region') return filters.region_group.length + filters.country.length;
+    if (id === 'region') return filters.region_group.length + filters.country.filter(c => c !== 'unknown').length;
     if (id === 'posted') return filters.posted_within_days ? 1 : 0;
-    return filters[id].length;
+    return filters[id].filter(v => v !== 'unknown').length;
 }
 
 /** Create the chips once, then only update their text and state: an open popover keeps a live anchor and focus. */
@@ -97,7 +139,6 @@ function paintSummary() {
 
 function paintStatic() {
     $('#searchClear').hidden = !filters.q;
-    $('#clearFilters').hidden = activeCount() === 0;
     const seg = $$('#statusSeg button');
     seg.forEach(button => {
         const checked = button.dataset.status === filters.status;
@@ -107,7 +148,23 @@ function paintStatic() {
     if (document.activeElement !== $('#searchInput')) $('#searchInput').value = filters.q;
 }
 
-export function paintAll() { paintChips(); paintStatic(); paintSummary(); }
+/** "Filters on: Remote · United States · last 7 days — showing 23 of 1,204." with Edit and Clear. */
+export function paintBanner() {
+    const banner = $('#filterBanner');
+    const active = activeCount() > 0;
+    banner.hidden = !active;
+    if (!active) return;
+    const parts = chipSpecs().filter(spec => chipCount(spec.id)).map(spec => spec.value());
+    if (filters.q) parts.push(`“${filters.q}”`);
+    if (filters.new_only) parts.push('new only');
+    const domain = scopeDomain();
+    const matching = domain ? counts.matchByDomain[domain] || 0 : counts.matching;
+    const all = domain ? counts.totalByDomain[domain] || 0 : counts.total;
+    const showing = counts.ready && counts.filtering ? ` — showing ${fmtNum(matching)} of ${fmtNum(all)}.` : '';
+    $('#filterBannerText').textContent = `Filters on: ${parts.join(' · ')}${showing}`;
+}
+
+export function paintAll() { paintChips(); paintStatic(); paintSummary(); paintBanner(); }
 
 /* ---------------------------------------------------------------- popovers */
 function checkbox(id, text, count, checked) {
@@ -135,46 +192,72 @@ function wireFooter(panel, close, clearAction) {
     panel.querySelector('[data-pop-done]').onclick = close;
 }
 
-const openMulti = (key, title, labels, searchable = false) => anchor => {
+/** "Include postings that don't say" for one filter: off unless ticked, and it only widens a choice that was made. */
+function unknownRow(key, noun) {
+    const n = unknownCount(key);
+    return `<div class="popover-rule"></div>
+        ${checkbox(`opt-${key}-unknown`, `Include postings that don't say${noun ? ` ${noun}` : ''}`, n === undefined ? undefined : n, filters[key].includes('unknown'))}`;
+}
+
+const openMulti = (key, title, vocab, labels, { unknown = false, searchable = false, custom = false } = {}) => anchor => {
     let needle = '';
     popoverHandle = openPopover({
-        anchor, label: `${title} filter`, width: 280, onClose: () => { popoverHandle = null; },
+        anchor, label: `${title} filter`, width: 300, onClose: () => { popoverHandle = null; },
         render(panel, close) {
-            const all = options(key, labels).filter(o => !needle || o.text.toLowerCase().includes(needle.toLowerCase()));
-            const body = all.length
-                ? all.map((o, i) => checkbox(`opt-${key}-${i}`, o.text, o.count, filters[key].includes(o.value))).join('')
-                : `<div class="option-empty">${facets ? 'Nothing to choose from yet.' : 'Loading…'}</div>`;
+            const all = options(key, vocab, labels).filter(o => !needle || o.text.toLowerCase().includes(needle.toLowerCase()));
+            const exact = all.some(o => o.text.toLowerCase() === needle.trim().toLowerCase());
+            const add = custom && needle.trim() && !exact ? `<button type="button" class="option" id="opt-${key}-add"><span class="box">${svgIcon('check')}</span><span class="truncate">Add “${esc(needle.trim())}”</span></button>` : '';
+            const rows = all.map((o, i) => `<button type="button" class="option" role="checkbox" id="opt-${key}-${i}" aria-checked="${filters[key].includes(o.value)}">
+                <span class="box">${svgIcon('check')}</span><span class="truncate">${esc(o.text)}</span>${o.count === undefined ? '' : `<span class="count">${o.count ? fmtNum(o.count) : '0 so far'}</span>`}</button>`).join('');
             panel.innerHTML = `<div class="popover-title label">${esc(title)}</div>
-                ${searchable ? `<input class="input" type="search" id="pop-search" placeholder="Find…" aria-label="Find in ${esc(title)}" value="${esc(needle)}">` : ''}
-                <div class="popover-body" role="group" aria-label="${esc(title)}">${body}</div>${footer()}`;
-            $$('.option', panel).forEach((button, i) => button.onclick = () => toggleValue(key, all[i].value));
+                ${searchable ? `<input class="input" type="search" id="pop-search" placeholder="${custom ? 'Find or type a name…' : 'Find…'}" aria-label="Find in ${esc(title)}" value="${esc(needle)}">` : ''}
+                <div class="popover-body" role="group" aria-label="${esc(title)}">${add}${rows || (add ? '' : `<div class="option-empty">${facets ? 'Nothing matches.' : 'Loading…'}</div>`)}</div>
+                ${unknown ? unknownRow(key, HINT_FIELDS[key] === 'location' ? 'a location' : key === 'department' ? 'a department' : HINT_FIELDS[key]) : ''}${footer()}`;
+            $$('.option[id^="opt-' + key + '-"]', panel).forEach(button => {
+                if (button.id.endsWith('-add')) button.onclick = () => { toggleValue(key, needle.trim()); needle = ''; };
+                else if (button.id.endsWith('-unknown')) button.onclick = () => toggleValue(key, 'unknown');
+                else button.onclick = () => toggleValue(key, all[Number(button.id.split('-').pop())].value);
+            });
             arrowKeys(panel);
             wireFooter(panel, close, () => clearKey(key));
             const search = panel.querySelector('#pop-search');
-            if (search) search.oninput = () => { needle = search.value; popoverHandle.refresh(); };
+            if (search) {
+                search.oninput = () => { needle = search.value; popoverHandle.refresh(); };
+                search.onkeydown = event => { if (event.key === 'Enter' && custom && needle.trim()) { event.preventDefault(); toggleValue(key, needle.trim()); needle = ''; } };
+            }
             return search || panel.querySelector('.option');
         },
     });
 };
 
 function openRegion(anchor) {
+    let needle = '';
+    loadCountries();
     popoverHandle = openPopover({
-        anchor, label: 'Region filter', width: 320, onClose: () => { popoverHandle = null; },
+        anchor, label: 'Region filter', width: 340, onClose: () => { popoverHandle = null; },
         render(panel, close) {
             const groups = (facets?.region_group || []).map(g => ({ value: g.value, text: `${g.label} (${g.value})` }));
-            const countries = options('country').map(o => ({ ...o, text: o.value === 'unknown' ? 'Not stated' : countryName(o.value) }));
+            const inDb = new Map((facets?.country || []).filter(f => f.value).map(f => [f.value, f.count]));
+            const countries = (allCountries || []).map(c => ({ value: c.code, text: c.name, count: facets ? (inDb.get(c.code) || 0) : undefined }))
+                .filter(c => !needle || c.text.toLowerCase().includes(needle.toLowerCase()) || c.value.toLowerCase() === needle.toLowerCase());
+            // chosen ones first, then those that have postings, then the rest alphabetically
+            countries.sort((a, b) => (filters.country.includes(b.value) - filters.country.includes(a.value)) || ((b.count || 0) - (a.count || 0)));
+            const row = (id, text, count, on) => checkbox(id, text, count === undefined ? undefined : count || undefined, on).replace('</button>', `${count === 0 ? '<span class="count">0 so far</span>' : ''}</button>`);
             panel.innerHTML = `<div class="popover-title label">Region</div>
+                <input class="input" type="search" id="pop-search" placeholder="Find a country…" aria-label="Find a country" value="${esc(needle)}">
                 <div class="popover-body">
-                    <div class="popover-title label">Regions</div>
-                    ${groups.map((g, i) => checkbox(`opt-group-${i}`, g.text, undefined, filters.region_group.includes(g.value))).join('')}
+                    ${needle ? '' : `<div class="popover-title label">Regions</div>${groups.map((g, i) => checkbox(`opt-group-${i}`, g.text, undefined, filters.region_group.includes(g.value))).join('')}`}
                     <div class="popover-title label">Countries</div>
-                    ${countries.length ? countries.map((c, i) => checkbox(`opt-country-${i}`, c.text, c.count, filters.country.includes(c.value))).join('') : '<div class="option-empty">Loading…</div>'}
-                </div>${footer()}`;
+                    ${allCountries ? (countries.length ? countries.map((c, i) => row(`opt-country-${i}`, c.text, c.count, filters.country.includes(c.value))).join('') : '<div class="option-empty">No country matches.</div>') : '<div class="option-empty">Loading…</div>'}
+                </div>${unknownRow('country', 'a location')}${footer()}`;
             $$('[id^="opt-group-"]', panel).forEach((button, i) => button.onclick = () => toggleValue('region_group', groups[i].value));
             $$('[id^="opt-country-"]', panel).forEach((button, i) => button.onclick = () => toggleValue('country', countries[i].value));
+            panel.querySelector('#opt-country-unknown').onclick = () => toggleValue('country', 'unknown');
             arrowKeys(panel);
             wireFooter(panel, close, () => { clearKey('region_group'); clearKey('country'); });
-            return panel.querySelector('.option');
+            const search = panel.querySelector('#pop-search');
+            search.oninput = () => { needle = search.value; popoverHandle.refresh(); };
+            return search;
         },
     });
 }
@@ -222,7 +305,11 @@ export function initFilterBar() {
     });
     $('#searchClear').addEventListener('click', () => { search.value = ''; setFilters({ q: '' }); search.focus(); });
     $('#searchHelp').addEventListener('click', event => { isOpen(event.currentTarget) ? closePopover() : openHelp(event.currentTarget); });
-    $('#clearFilters').addEventListener('click', () => { clearFilters(); $('#searchInput').value = ''; });
+    $('#bannerClear').addEventListener('click', () => { clearFilters(); $('#searchInput').value = ''; });
+    $('#bannerEdit').addEventListener('click', () => {
+        const active = chipSpecs().find(spec => chipCount(spec.id));
+        ($(`[data-chip="${active ? active.id : 'workplace'}"]`) || $('[data-chip="workplace"]')).click();
+    });
 
     $('#filterChips').addEventListener('click', event => {
         const chip = event.target.closest('[data-chip]');
@@ -247,8 +334,10 @@ export function initFilterBar() {
         seg.querySelector(`[data-status="${next}"]`).focus();
     });
 
-    on('filters', () => { announceNext = true; paintAll(); refreshFacetsSoon(); });
-    on('active-tab', () => refreshFacetsSoon());
+    on('filters', () => { announceNext = true; paintAll(); refreshFacetsSoon(); refreshCountsSoon(); saveFiltersSoon(); });
+    on('counts', paintBanner);
+    on('active-tab', () => { refreshFacetsSoon(); paintBanner(); });
     paintAll();
     refreshFacets();
+    refreshCounts();
 }

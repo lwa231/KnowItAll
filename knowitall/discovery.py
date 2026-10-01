@@ -188,7 +188,7 @@ def _sitemap_urls(ctx, site):
             lambda: Sitemap(site.root_url, cache=ctx.config.cache is True)
             .filter(Filters.any_segment_equals(["careers", "career", "jobs", "job"]))
             .links(),
-            seconds=SITEMAP_SECONDS,
+            seconds=SITEMAP_SECONDS, should_cancel=ctx.should_stop,
         )
     except Exception as error:
         ctx.log(f"sitemap lookup failed: {type(error).__name__}")

@@ -22,6 +22,7 @@ class RunConfig:
     use_browser: bool = True                   # allow the Chrome fallback at all
     headless: bool = True                      # only used by the standalone renderer (no renderer supplied)
     renderer: Optional[Callable] = None        # callable(url, should_cancel) -> page dict, e.g. BrowserPool.render
+    reuse: str = "12h"                        # how long downloaded pages are reused: "1h" or "12h" (cache="REFRESH" is "off")
     debug_payloads: bool = False               # log what JSON a rendered page loaded (to build per-site adapters)
     time_limit: Optional[int] = None           # seconds a company may take (the runner enforces it; this is for wording)
 

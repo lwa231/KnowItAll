@@ -1,31 +1,23 @@
 // Boot: load settings, wire every module together, connect to the live stream.
 import * as api from './api.js';
-import { state, on } from './state.js';
+import { state, on, emit } from './state.js';
 import { loadSettings, syncBindings } from './settings.js';
 import { logLine, announce } from './notify.js';
 import { initFilterBar, refreshFacets, refreshFacetsLive } from './filterbar.js';
-import { initWorkspace, onServerState, refreshVisible } from './workspace.js';
+import { refreshCounts, refreshCountsLive } from './counts.js';
+import { applySaved } from './filters.js';
+import { initWorkspace, onServerState, refreshVisible, selectTab, showLatest } from './workspace.js';
 import { initQueue, renderQueue } from './queue.js';
+import { initQueuePanel } from './queuepanel.js';
+import { initBreadcrumbs } from './breadcrumbs.js';
 import { initRun, paintRunState, paintMetrics, announceRunChange } from './run.js';
 import { initNotices, renderNotices } from './notices.js';
 import { initHistory, loadHistory } from './views/history.js';
+import { showView, initRail } from './nav.js';
 import { initOutput, loadOutput } from './views/output.js';
-import { initSettingsView, loadSettingsView } from './views/settings.js';
-import { initSystem, startSystemPolling, stopSystemPolling } from './views/system.js';
-import { $, $$ } from './util.js';
-
-function showView(name) {
-    state.activeView = name;
-    $$('.nav-item[data-view]').forEach(item => {
-        if (item.dataset.view === name) item.setAttribute('aria-current', 'page'); else item.removeAttribute('aria-current');
-    });
-    $$('.view').forEach(view => view.classList.toggle('active', view.dataset.view === name));
-    stopSystemPolling();
-    if (name === 'history') loadHistory();
-    if (name === 'output') loadOutput();
-    if (name === 'settings') loadSettingsView();
-    if (name === 'system') startSystemPolling();
-}
+import { initSettingsView } from './views/settings.js';
+import { initSystem } from './views/system.js';
+import { $ } from './util.js';
 
 /** A company that has just finished with nothing to show says why, once, to screen readers (the log and panes show it too). */
 function announceOutcomes(previous) {
@@ -52,9 +44,9 @@ function handleState(incoming) {
     renderQueue(); paintRunState(); paintMetrics(); renderNotices();
     announceRunChange(wasRunning);
     announceOutcomes(previous);
-    if (jobsChanged) refreshFacetsLive();
+    if (jobsChanged) { refreshFacetsLive(); refreshCountsLive(); }
     if (wasRunning && !state.running) {                                  // a scan just ended: settle every count
-        refreshFacets();
+        refreshFacets(); refreshCounts();
         refreshVisible({ live: true });
         if (state.activeView === 'history') loadHistory();
         if (state.activeView === 'output') loadOutput();
@@ -63,11 +55,13 @@ function handleState(incoming) {
 
 async function boot() {
     await loadSettings();
+    applySaved(state.settings.filters);                  // last time's chip filters, before the first feed is asked for
     on('settings', syncBindings);
 
-    $$('.nav-item[data-view]').forEach(item => item.addEventListener('click', () => showView(item.dataset.view)));
+    initRail();
     initRun(); initQueue(); initNotices(); initFilterBar(); initWorkspace();
     initHistory(showView); initOutput(); initSettingsView(); initSystem();
+    initQueuePanel(showView); initBreadcrumbs({ showView, selectTab, showLatest });
     renderQueue(); paintRunState(); paintMetrics(); renderNotices();
 
     document.addEventListener('keydown', event => {

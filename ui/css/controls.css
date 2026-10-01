@@ -11,9 +11,10 @@
 .btn:hover:not(:disabled) { background: var(--secondary-hi); }
 .btn-primary { background: var(--accent); color: var(--on-accent); }
 .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
-.btn-stop { background: var(--red-fill); color: var(--red); }
-.btn-stop:hover:not(:disabled) { background: var(--red-fill); filter: brightness(1.25); }
-.btn-lg { min-height: 40px; padding: 0 var(--sp-6); }
+/* Stop is outlined, never a filled primary-looking button, so it cannot be mistaken for the main action */
+.btn-stop { background: transparent; color: var(--accent-text); box-shadow: inset 0 0 0 1.5px var(--accent-text); }
+.btn-stop:hover:not(:disabled) { background: var(--glow); }
+.btn-lg { min-height: 40px; padding: 0 var(--sp-5); white-space: nowrap; flex-shrink: 0; }
 .btn-quiet { background: transparent; color: var(--text-muted); }
 .btn-quiet:hover:not(:disabled) { background: var(--secondary); color: var(--text-bright); }
 .icon-btn {
@@ -52,7 +53,7 @@
 /* segmented control (radio group) */
 .segmented { display: inline-flex; padding: 2px; border-radius: var(--radius); background: var(--secondary); gap: 2px; }
 .segmented button {
-    min-height: 28px; padding: 0 var(--sp-3); border-radius: 3px; color: var(--text-muted);
+    white-space: nowrap; min-height: 28px; padding: 0 var(--sp-3); border-radius: 3px; color: var(--text-muted);
     font-family: var(--font-mono); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: var(--tracking-label);
     transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
@@ -81,6 +82,7 @@
 }
 .popover-title { padding: var(--sp-1) var(--sp-3) var(--sp-2); }
 .popover-body { overflow-y: auto; min-height: 0; }
+.popover-rule { height: 1px; margin: var(--sp-2) var(--sp-1); background: var(--secondary-hi); }
 .popover-foot { display: flex; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-2) var(--sp-1) 0; }
 .option {
     display: flex; align-items: center; gap: var(--sp-3); width: 100%; min-height: var(--hit); padding: 0 var(--sp-3);
@@ -120,3 +122,24 @@
 }
 .toast.bad { color: var(--red); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* range input (HyperUI "Range Inputs": Base + Base with output + label marks). HyperUI has no dark version; this is the
+   gray-300 track / gray-500 ring / gray-200 centre look remapped to tokens: a red ring around a surface-coloured centre. */
+input[type="range"] {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 14px; border-radius: 9999px;
+    background: var(--secondary-hi); cursor: pointer; flex: 1; min-width: 0;
+}
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 28px; height: 28px; border-radius: 9999px;
+    border: 6px solid var(--slider-ring); background: var(--bg-base); cursor: pointer;
+    transition: box-shadow var(--t-fast) var(--ease);
+}
+input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 9999px; border: 6px solid var(--slider-ring); background: var(--bg-base); cursor: pointer; }
+input[type="range"]:hover::-webkit-slider-thumb { box-shadow: 0 0 0 6px var(--glow); }
+input[type="range"]:focus-visible { outline: 2px solid var(--focus); outline-offset: 6px; border-radius: 9999px; }
+.slider-row { display: flex; align-items: center; gap: var(--sp-3); margin-top: var(--sp-3); }
+.slider-row output { min-width: 84px; text-align: right; font-family: var(--font-mono); font-size: var(--fs-md); line-height: 1; font-weight: 500; color: var(--text-bright); }
+/* label marks: inset by the thumb radius (14px) on the left and by the readout's width (84 + 12) plus the radius on the right,
+   so each label sits under its stop. Not a <datalist>: WebView2 and WKWebView style that differently. */
+.marks { position: relative; height: 16px; margin: 6px calc(96px + 14px) 0 14px; font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--text-dim); }
+.marks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }

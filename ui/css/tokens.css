@@ -10,7 +10,7 @@
 :root, [data-theme="dark"] {
     color-scheme: dark;
     /* surfaces, darkest to lightest */
-    --chrome:        #000000;      /* sidebar, header, status strips */
+    --chrome:        #000000;      /* rail, top bar, header, status strips */
     --bg-base:       #0b0b0c;      /* working surface */
     --bg-raise:      #111113;      /* pane heads, panels, popovers */
     --secondary:     #21252b;      /* inputs, buttons, table heads */
@@ -24,17 +24,23 @@
     --text-dim:      #9299a4;      /* smallest-hierarchy labels; still >= 4.5:1 on every surface */
 
     /* accent + states */
-    --accent:        #35365e;      /* fills */
-    --accent-hover:  #414273;
-    --accent-text:   #9899c8;      /* text and glyphs on dark surfaces */
-    --on-accent:     #eceef3;      /* text on an accent fill */
+    --accent:        #bf1704;      /* brand red: fills */
+    --accent-hover:  #d81a05;
+    --accent-text:   #fb6655;      /* red text and glyphs on dark surfaces */
+    --on-accent:     #ffffff;      /* text on an accent fill */
     --green:         #98c379;
     --warn:          #e5c07b;
-    --red:           #e8808a;
-    --red-fill:      rgba(224, 108, 117, 0.16);
+    --red:           #f28aa8;      /* errors: a rose, kept apart from the brand red (hue 343 vs 6) */
+    --red-fill:      rgba(242, 110, 150, 0.16);
     --warn-fill:     rgba(229, 192, 123, 0.14);
-    --glow:          rgba(53, 54, 94, 0.55);
-    --focus:         #9899c8;      /* keyboard focus ring: >= 3:1 against every surface */
+    --glow:          rgba(191, 23, 4, 0.35);
+    --focus:         #fb6655;      /* keyboard focus ring: >= 3:1 against every surface */
+    --border:        #21252b;      /* hairlines on the rail, top bar and queue panel */
+    --slider-ring:   #fb6655;      /* slider thumb ring: >= 3:1 against the track */
+    --status-active: #ff8c1a;      /* pixel character + SCANNING label while the queue is active (orange, never the brand red) */
+    --progress-start:#ff4b33;      /* progress gradient: red, */
+    --progress-mid:  #f5c518;      /* yellow, */
+    --progress-end:  #3ecf6a;      /* green */
     --shadow-float:  0 14px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.05);
     --shadow-pop:    0 10px 30px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
@@ -53,17 +59,23 @@
     --text-muted:    #4f5661;
     --text-dim:      #585f6a;
 
-    --accent:        #35365e;
-    --accent-hover:  #2a2b4d;
-    --accent-text:   #35365e;
+    --accent:        #bf1704;
+    --accent-hover:  #9e1303;
+    --accent-text:   #b91604;
     --on-accent:     #ffffff;
     --green:         #2f6a1a;
     --warn:          #7a5405;
-    --red:           #a82d25;
-    --red-fill:      rgba(179, 50, 42, 0.12);
+    --red:           #a3244f;      /* errors: a crimson-rose, kept apart from the brand red (hue 340 vs 6) */
+    --red-fill:      rgba(163, 36, 79, 0.12);
     --warn-fill:     rgba(122, 84, 5, 0.12);
-    --glow:          rgba(53, 54, 94, 0.22);
-    --focus:         #35365e;
+    --glow:          rgba(191, 23, 4, 0.18);
+    --focus:         #bf1704;
+    --border:        #e6e7eb;
+    --slider-ring:   #bf1704;
+    --status-active: #b45000;
+    --progress-start:#bf1704;
+    --progress-mid:  #d9a300;
+    --progress-end:  #1f8f3a;
     --shadow-float:  0 14px 40px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.07);
     --shadow-pop:    0 10px 30px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
@@ -92,11 +104,14 @@
     --ease: cubic-bezier(0.2, 0, 0, 1);
 
     /* layout */
-    --sidebar-w: 248px;
-    --header-top-h: 132px;
+    --rail-w: 64px;
+    --queue-w: 240px;
+    --topbar-h: 48px;
+    --header-top-h: 112px;       /* the top bar added 48px above the header, so the header itself is tighter than before */
     --z-sticky: 10;
     --z-guides: 55;
     --z-drop: 60;
+    --z-rail: 120;
     --z-popover: 200;
     --z-toast: 300;
     --z-drag: 999;

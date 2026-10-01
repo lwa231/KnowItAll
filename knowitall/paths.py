@@ -14,7 +14,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from platformdirs import user_data_dir
+from platformdirs import user_data_dir, user_documents_dir
 
 from . import logsetup
 
@@ -31,7 +31,7 @@ def _resolve():
     elif home:
         exports = data / "exports"
     else:
-        exports = Path.home() / "Documents" / APP_NAME / "exports"
+        exports = Path(user_documents_dir()) / APP_NAME / "exports"      # the real Documents folder (OneDrive-aware on Windows)
     return data, exports
 
 
@@ -40,6 +40,7 @@ DB_PATH = DATA_DIR / "history.db"
 CACHE_DIR = DATA_DIR / "cache"
 LOG_DIR = DATA_DIR / "logs"
 SETTINGS_PATH = DATA_DIR / "settings.json"
+BACKUPS_DIR = DATA_DIR / "backups"           # inside the app-data folder, so they survive an uninstall and reinstall
 
 
 def code_dir():
@@ -110,7 +111,7 @@ def enter_data_dir():
                 print(f"[knowitall] moved old data: {line}", flush=True)
         except OSError as error:
             _log.warning("could not move old data: %s", error)
-    for folder in (CACHE_DIR, LOG_DIR, EXPORTS_DIR):
+    for folder in (CACHE_DIR, LOG_DIR, EXPORTS_DIR, BACKUPS_DIR):
         folder.mkdir(parents=True, exist_ok=True)
     os.chdir(DATA_DIR)
     return DATA_DIR
